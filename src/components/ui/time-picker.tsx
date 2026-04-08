@@ -4,7 +4,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { ChevronDown, Clock3 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/app/ui/1/components/button';
+import { Button } from '@/components/ui/button';
 
 interface TimePickerProps {
   id?: string;

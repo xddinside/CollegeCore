@@ -13,14 +13,14 @@ import {
   getSemesterSubjects,
   getSprintSessions,
 } from '@/lib/actions';
-import { Badge } from '@/app/ui/1/components/badge';
-import { Button } from '@/app/ui/1/components/button';
-import { DatePicker } from '@/app/ui/1/components/date-picker';
-import { Input } from '@/app/ui/1/components/input';
-import { Label } from '@/app/ui/1/components/label';
-import { Select, SelectItem } from '@/app/ui/1/components/select';
-import { Textarea } from '@/app/ui/1/components/textarea';
-import { TimePicker } from '@/app/ui/1/components/time-picker';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectItem } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { TimePicker } from '@/components/ui/time-picker';
 
 interface ExamSprint {
   id: number;

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Button } from '@/app/ui/1/components/button';
+import { Button } from '@/components/ui/button';
 
 const easeOutExpo: [number, number, number, number] = [0.16, 1, 0.3, 1];
 

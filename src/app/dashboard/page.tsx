@@ -12,15 +12,15 @@ import {
 } from '@/lib/actions';
 import { getDueStatus } from '@/lib/utils';
 import { DashboardGreeting } from '@/components/dashboard-greeting';
-import { Badge } from '@/app/ui/1/components/badge';
-import { Button } from '@/app/ui/1/components/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
-function formatDueDate(dueDate: Date | string | null) {
+function formatDueDate(dueDate: Date | string | null, precomputedStatus?: ReturnType<typeof getDueStatus>) {
   if (!dueDate) {
     return 'No due date';
   }
 
-  const status = getDueStatus(dueDate);
+  const status = precomputedStatus ?? getDueStatus(dueDate);
   const date = new Date(dueDate);
 
   if (status === 'today') {
@@ -125,6 +125,7 @@ export default async function DashboardPage() {
               <div className="space-y-1">
                 {pendingAssignments.map((assignment) => {
                   const dueStatus = getDueStatus(assignment.dueDate);
+                  const formattedDue = formatDueDate(assignment.dueDate, dueStatus);
 
                   return (
                     <Link
@@ -170,7 +171,7 @@ export default async function DashboardPage() {
                                   : 'text-sm text-muted-foreground'
                               }
                             >
-                              {formatDueDate(assignment.dueDate)}
+                              {formattedDue}
                             </span>
                           </div>
                         </div>

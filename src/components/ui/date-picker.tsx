@@ -6,7 +6,7 @@ import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DayPicker, type Matcher } from 'react-day-picker';
 import { cn } from '@/lib/utils';
-import { Button } from '@/app/ui/1/components/button';
+import { Button } from '@/components/ui/button';
 
 interface DatePickerProps {
   id?: string;

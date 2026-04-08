@@ -49,3 +49,8 @@ next-env.d.ts
 /ui-1-preview.png
 /ui2-dashboard.png
 /ui2-landing.png
+
+# agent files
+AGENTS.md
+CLAUDE.md
+PLAN.md

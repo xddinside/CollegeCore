@@ -175,6 +175,11 @@ export async function toggleTodo(id: number) {
   revalidatePath('/dashboard');
 }
 
+export async function setTodoCompleted(id: number, isCompleted: boolean) {
+  await db.update(todos).set({ isCompleted }).where(eq(todos.id, id));
+  revalidatePath('/dashboard');
+}
+
 export async function deleteTodo(id: number) {
   await db.delete(todos).where(eq(todos.id, id));
   revalidatePath('/dashboard');

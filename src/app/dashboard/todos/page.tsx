@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListTodo, Plus, Trash2 } from 'lucide-react';
 import {
   createTodo,
@@ -9,13 +10,14 @@ import {
   getCurrentSemester,
   getSemesterSubjects,
   getTodos,
-  toggleTodo,
+  setTodoCompleted,
 } from '@/lib/actions';
-import { Button } from '@/app/ui/1/components/button';
-import { DatePicker } from '@/app/ui/1/components/date-picker';
-import { Input } from '@/app/ui/1/components/input';
-import { Label } from '@/app/ui/1/components/label';
-import { Select, SelectItem } from '@/app/ui/1/components/select';
+import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectItem } from '@/components/ui/select';
 
 interface Todo {
   id: number;
@@ -33,82 +35,116 @@ interface Subject {
   color: string;
 }
 
+interface TodosPageData {
+  semesterId: number;
+  subjects: Subject[];
+  todos: Todo[];
+}
+
+async function getTodosPageData(clerkId: string): Promise<TodosPageData> {
+  const semester = await getCurrentSemester(clerkId);
+
+  if (!semester) {
+    throw new Error('No current semester found');
+  }
+
+  const [subjects, todos] = await Promise.all([
+    getSemesterSubjects(semester.id),
+    getTodos(semester.id),
+  ]);
+
+  return {
+    semesterId: semester.id,
+    subjects,
+    todos,
+  };
+}
+
 export default function TodosPage() {
   const { user, isLoaded } = useUser();
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const queryClient = useQueryClient();
   const [newTitle, setNewTitle] = useState('');
   const [newDueDate, setNewDueDate] = useState('');
   const [newSubjectId, setNewSubjectId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!isLoaded || !user) return;
+  const todosQueryKey = user ? dashboardQueryKeys.todos(user.id) : ['dashboard', 'todos', 'anonymous'];
+  const todosQuery = useQuery({
+    queryKey: todosQueryKey,
+    queryFn: () => getTodosPageData(user!.id),
+    enabled: isLoaded && !!user,
+  });
 
-    void (async () => {
-      const semester = await getCurrentSemester(user.id);
-      if (!semester) return;
+  const createTodoMutation = useMutation({
+    mutationFn: async () => {
+      if (!todosQuery.data || !newTitle.trim()) {
+        return;
+      }
 
-      const [loadedSubjects, loadedTodos] = await Promise.all([
-        getSemesterSubjects(semester.id),
-        getTodos(semester.id),
-      ]);
+      await createTodo(
+        todosQuery.data.semesterId,
+        newTitle.trim(),
+        newSubjectId,
+        newDueDate ? new Date(newDueDate) : null
+      );
+    },
+    onSuccess: async () => {
+      setNewTitle('');
+      setNewDueDate('');
+      setNewSubjectId(null);
+      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
+    },
+  });
 
-      setSubjects(loadedSubjects);
-      setTodos(loadedTodos);
-      setLoading(false);
-    })();
-  }, [isLoaded, user]);
+  const toggleTodoMutation = useMutation({
+    mutationFn: ({ id, isCompleted }: { id: number; isCompleted: boolean }) =>
+      setTodoCompleted(id, isCompleted),
+    onMutate: async ({ id, isCompleted }) => {
+      await queryClient.cancelQueries({ queryKey: todosQueryKey });
 
-  async function loadData() {
-    if (!user) return;
+      const previousData = queryClient.getQueryData<TodosPageData>(todosQueryKey);
 
-    const semester = await getCurrentSemester(user.id);
-    if (!semester) return;
+      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
 
-    const [loadedSubjects, loadedTodos] = await Promise.all([
-      getSemesterSubjects(semester.id),
-      getTodos(semester.id),
-    ]);
+        return {
+          ...current,
+          todos: current.todos.map((todo) =>
+            todo.id === id ? { ...todo, isCompleted } : todo
+          ),
+        };
+      });
 
-    setSubjects(loadedSubjects);
-    setTodos(loadedTodos);
-    setLoading(false);
-  }
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(todosQueryKey, context.previousData);
+      }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
+    },
+  });
 
-  async function handleCreate() {
-    if (!newTitle.trim() || !user) return;
+  const deleteTodoMutation = useMutation({
+    mutationFn: (id: number) => deleteTodo(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
+    },
+  });
 
-    const semester = await getCurrentSemester(user.id);
-    if (!semester) return;
-
-    await createTodo(
-      semester.id,
-      newTitle.trim(),
-      newSubjectId,
-      newDueDate ? new Date(newDueDate) : null
-    );
-
-    setNewTitle('');
-    setNewDueDate('');
-    setNewSubjectId(null);
-    await loadData();
-  }
-
-  async function handleToggle(id: number) {
-    await toggleTodo(id);
-    await loadData();
-  }
-
-  async function handleDelete(id: number) {
-    await deleteTodo(id);
-    await loadData();
-  }
-
+  const todos = todosQuery.data?.todos ?? [];
+  const subjects = todosQuery.data?.subjects ?? [];
   const completedCount = todos.filter((todo) => todo.isCompleted).length;
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || todosQuery.isLoading) {
     return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+  }
+
+  if (todosQuery.isError) {
+    return <div className="py-8 text-sm text-destructive">Unable to load todos.</div>;
   }
 
   return (
@@ -131,7 +167,11 @@ export default function TodosPage() {
               placeholder="Add a new todo..."
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && void handleCreate()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && newTitle.trim()) {
+                  createTodoMutation.mutate();
+                }
+              }}
               className="flex-1"
             />
           </div>
@@ -149,7 +189,7 @@ export default function TodosPage() {
                 <SelectItem key={subject.id} value={subject.id.toString()}>
                   {subject.name}
                 </SelectItem>
-                ))}
+              ))}
             </Select>
           </div>
           <div className="space-y-2 border-t border-border/70 p-4 md:col-span-4 md:border-t md:border-r md:border-border/70 lg:col-span-3">
@@ -164,7 +204,7 @@ export default function TodosPage() {
             />
           </div>
           <div className="flex items-end justify-end border-t border-border/70 p-4 md:col-span-8 md:border-t lg:col-span-9">
-            <Button onClick={handleCreate} disabled={!newTitle.trim()}>
+            <Button onClick={() => createTodoMutation.mutate()} disabled={!newTitle.trim() || createTodoMutation.isPending}>
               <Plus className="mr-2 h-4 w-4" />
               Add Todo
             </Button>
@@ -191,7 +231,12 @@ export default function TodosPage() {
             >
               <button
                 type="button"
-                onClick={() => handleToggle(todo.id)}
+                onClick={() =>
+                  toggleTodoMutation.mutate({
+                    id: todo.id,
+                    isCompleted: !todo.isCompleted,
+                  })
+                }
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
                   todo.isCompleted
                     ? 'border-primary bg-primary'
@@ -243,7 +288,7 @@ export default function TodosPage() {
 
               <button
                 type="button"
-                onClick={() => handleDelete(todo.id)}
+                onClick={() => deleteTodoMutation.mutate(todo.id)}
                 className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
                 aria-label={`Delete ${todo.title}`}
               >

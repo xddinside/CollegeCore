@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar,
   CheckCircle2,
@@ -19,14 +20,15 @@ import {
   getSemesterSubjects,
   updateAssignmentStatus,
 } from '@/lib/actions';
+import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { getDueStatus } from '@/lib/utils';
-import { Badge } from '@/app/ui/1/components/badge';
-import { Button } from '@/app/ui/1/components/button';
-import { DatePicker } from '@/app/ui/1/components/date-picker';
-import { Input } from '@/app/ui/1/components/input';
-import { Label } from '@/app/ui/1/components/label';
-import { Select, SelectItem } from '@/app/ui/1/components/select';
-import { Textarea } from '@/app/ui/1/components/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectItem } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -47,6 +49,12 @@ interface Subject {
   id: number;
   name: string;
   color: string;
+}
+
+interface AssignmentsPageData {
+  semesterId: number;
+  subjects: Subject[];
+  assignments: Assignment[];
 }
 
 function getStatusIcon(status: AssignmentStatus) {
@@ -82,10 +90,28 @@ function formatDate(dateValue: Date | string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+async function getAssignmentsPageData(clerkId: string): Promise<AssignmentsPageData> {
+  const semester = await getCurrentSemester(clerkId);
+
+  if (!semester) {
+    throw new Error('No current semester found');
+  }
+
+  const [subjects, assignments] = await Promise.all([
+    getSemesterSubjects(semester.id),
+    getAllAssignments(semester.id),
+  ]);
+
+  return {
+    semesterId: semester.id,
+    subjects,
+    assignments,
+  };
+}
+
 export default function AssignmentsPage() {
   const { user, isLoaded } = useUser();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -94,69 +120,81 @@ export default function AssignmentsPage() {
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!isLoaded || !user) return;
+  const assignmentsQueryKey = user
+    ? dashboardQueryKeys.assignments(user.id)
+    : ['dashboard', 'assignments', 'anonymous'];
+  const assignmentsQuery = useQuery({
+    queryKey: assignmentsQueryKey,
+    queryFn: () => getAssignmentsPageData(user!.id),
+    enabled: isLoaded && !!user,
+  });
 
-    void (async () => {
-      const semester = await getCurrentSemester(user.id);
-      if (!semester) return;
+  const createAssignmentMutation = useMutation({
+    mutationFn: async () => {
+      if (!newTitle.trim() || !newSubjectId) {
+        return;
+      }
 
-      const [loadedSubjects, loadedAssignments] = await Promise.all([
-        getSemesterSubjects(semester.id),
-        getAllAssignments(semester.id),
-      ]);
+      await createAssignment(
+        newSubjectId,
+        newTitle.trim(),
+        newDescription.trim() || null,
+        newDueDate ? new Date(newDueDate) : null
+      );
+    },
+    onSuccess: async () => {
+      setNewTitle('');
+      setNewDescription('');
+      setNewDueDate('');
+      setNewSubjectId(null);
+      setShowForm(false);
+      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+    },
+  });
 
-      setSubjects(loadedSubjects);
-      setAssignments(loadedAssignments);
-      setLoading(false);
-    })();
-  }, [isLoaded, user]);
+  const updateAssignmentStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: AssignmentStatus }) =>
+      updateAssignmentStatus(id, status),
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
 
-  async function loadData() {
-    if (!user) return;
+      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
 
-    const semester = await getCurrentSemester(user.id);
-    if (!semester) return;
+      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
 
-    const [loadedSubjects, loadedAssignments] = await Promise.all([
-      getSemesterSubjects(semester.id),
-      getAllAssignments(semester.id),
-    ]);
+        return {
+          ...current,
+          assignments: current.assignments.map((assignment) =>
+            assignment.id === id ? { ...assignment, status } : assignment
+          ),
+        };
+      });
 
-    setSubjects(loadedSubjects);
-    setAssignments(loadedAssignments);
-    setLoading(false);
-  }
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
+      }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+    },
+  });
 
-  async function handleCreate() {
-    if (!newTitle.trim() || !newSubjectId) return;
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: (id: number) => deleteAssignment(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+    },
+  });
 
-    await createAssignment(
-      newSubjectId,
-      newTitle.trim(),
-      newDescription.trim() || null,
-      newDueDate ? new Date(newDueDate) : null
-    );
-
-    setNewTitle('');
-    setNewDescription('');
-    setNewDueDate('');
-    setNewSubjectId(null);
-    setShowForm(false);
-    await loadData();
-  }
-
-  async function handleStatusChange(id: number, status: AssignmentStatus) {
-    await updateAssignmentStatus(id, status);
-    await loadData();
-  }
-
-  async function handleDelete(id: number) {
-    await deleteAssignment(id);
-    await loadData();
-  }
+  const assignments = assignmentsQuery.data?.assignments ?? [];
+  const subjects = assignmentsQuery.data?.subjects ?? [];
 
   const filteredAssignments = assignments.filter((assignment) => {
     if (subjectFilter !== 'all' && assignment.subjectId !== Number(subjectFilter)) {
@@ -183,8 +221,12 @@ export default function AssignmentsPage() {
   const inProgressCount = filteredAssignments.filter((assignment) => assignment.status === 'IN_PROGRESS').length;
   const completedCount = filteredAssignments.filter((assignment) => assignment.status === 'COMPLETED').length;
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || assignmentsQuery.isLoading) {
     return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+  }
+
+  if (assignmentsQuery.isError) {
+    return <div className="py-8 text-sm text-destructive">Unable to load assignments.</div>;
   }
 
   return (
@@ -259,7 +301,10 @@ export default function AssignmentsPage() {
             </div>
           </div>
           <div className="flex items-center justify-end border-t border-border/70 px-4 py-4">
-            <Button onClick={handleCreate} disabled={!newTitle.trim() || !newSubjectId}>
+            <Button
+              onClick={() => createAssignmentMutation.mutate()}
+              disabled={!newTitle.trim() || !newSubjectId || createAssignmentMutation.isPending}
+            >
               Save Assignment
             </Button>
           </div>
@@ -330,10 +375,10 @@ export default function AssignmentsPage() {
                   type="button"
                   className="mt-0.5"
                   onClick={() =>
-                    handleStatusChange(
-                      assignment.id,
-                      assignment.status === 'COMPLETED' ? 'TODO' : 'COMPLETED'
-                    )
+                    updateAssignmentStatusMutation.mutate({
+                      id: assignment.id,
+                      status: assignment.status === 'COMPLETED' ? 'TODO' : 'COMPLETED',
+                    })
                   }
                   aria-label={`Mark ${assignment.title} as ${assignment.status === 'COMPLETED' ? 'todo' : 'completed'}`}
                 >
@@ -402,7 +447,10 @@ export default function AssignmentsPage() {
                         aria-label={`Change status for ${assignment.title}`}
                         value={assignment.status}
                         onChange={(event) =>
-                          handleStatusChange(assignment.id, event.target.value as AssignmentStatus)
+                          updateAssignmentStatusMutation.mutate({
+                            id: assignment.id,
+                            status: event.target.value as AssignmentStatus,
+                          })
                         }
                         className="h-9 min-w-36 px-3 text-xs"
                       >
@@ -412,7 +460,7 @@ export default function AssignmentsPage() {
                           </SelectItem>
                         ))}
                       </Select>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(assignment.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => deleteAssignmentMutation.mutate(assignment.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

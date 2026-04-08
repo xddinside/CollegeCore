@@ -11,9 +11,9 @@ import {
   getSemesterSubjects,
   updateSubject,
 } from '@/lib/actions';
-import { Button } from '@/app/ui/1/components/button';
-import { Input } from '@/app/ui/1/components/input';
-import { Label } from '@/app/ui/1/components/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Subject {
   id: number;

@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { createSemester, createSubject } from '@/lib/actions';
-import { Button } from '@/app/ui/1/components/button';
-import { Input } from '@/app/ui/1/components/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
