@@ -13,6 +13,7 @@ import {
 } from '@/lib/actions';
 import { Button } from '@/app/ui/1/components/button';
 import { Input } from '@/app/ui/1/components/input';
+import { Label } from '@/app/ui/1/components/label';
 
 interface Subject {
   id: number;
@@ -149,26 +150,36 @@ export default function SubjectsPage() {
       </div>
 
       {showForm && (
-        <div className="space-y-4 rounded-xl border border-border bg-accent/40 p-5">
-          <Input
-            placeholder="Subject name"
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            autoFocus
-          />
-          <div className="flex flex-wrap gap-2">
-            {PRESET_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => setNewColor(color)}
-                className={`h-7 w-7 rounded-full transition-transform ${
-                  newColor === color ? 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
-                }`}
-                style={{ backgroundColor: color }}
-                aria-label={`Choose ${color}`}
-              />
-            ))}
+        <div className="space-y-5 rounded-2xl border border-border bg-accent/40 p-5 sm:p-6">
+          <div className="space-y-2">
+            <Label htmlFor="subject-name">Subject name</Label>
+            <Input
+              id="subject-name"
+              placeholder="Subject name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Color</Label>
+              <p className="text-sm text-muted-foreground">Pick the accent used across assignments and sessions.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/80 p-3">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setNewColor(color)}
+                  className={`h-8 w-8 rounded-full transition-transform ${
+                    newColor === color ? 'scale-110 ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+                  }`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Choose ${color}`}
+                />
+              ))}
+            </div>
           </div>
           <div className="flex justify-end">
             <Button onClick={handleSubmit} disabled={!newName.trim()}>

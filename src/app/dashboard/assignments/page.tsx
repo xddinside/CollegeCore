@@ -22,7 +22,11 @@ import {
 import { getDueStatus } from '@/lib/utils';
 import { Badge } from '@/app/ui/1/components/badge';
 import { Button } from '@/app/ui/1/components/button';
+import { DatePicker } from '@/app/ui/1/components/date-picker';
 import { Input } from '@/app/ui/1/components/input';
+import { Label } from '@/app/ui/1/components/label';
+import { Select, SelectItem } from '@/app/ui/1/components/select';
+import { Textarea } from '@/app/ui/1/components/textarea';
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
 
@@ -199,41 +203,62 @@ export default function AssignmentsPage() {
       </div>
 
       {showForm && (
-        <div className="space-y-4 rounded-xl border border-border bg-accent/40 p-5">
-          <Input
-            placeholder="Assignment title"
-            value={newTitle}
-            onChange={(event) => setNewTitle(event.target.value)}
-            autoFocus
-          />
-          <textarea
-            value={newDescription}
-            onChange={(event) => setNewDescription(event.target.value)}
-            placeholder="Description (optional)"
-            rows={3}
-            className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="date"
-              value={newDueDate}
-              onChange={(event) => setNewDueDate(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <select
-              value={newSubjectId ?? ''}
-              onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Select subject</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-background/80">
+          <div className="grid gap-0 md:grid-cols-12">
+            <div className="space-y-2 p-4 md:col-span-7 md:border-b md:border-r md:border-border/70">
+              <Label htmlFor="assignment-title" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Title
+              </Label>
+              <Input
+                id="assignment-title"
+                placeholder="Assignment title"
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-5 md:border-t-0 md:border-b">
+              <Label htmlFor="assignment-subject" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Subject
+              </Label>
+              <Select
+                id="assignment-subject"
+                value={newSubjectId?.toString() ?? ''}
+                onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
+              >
+                <SelectItem value="">Select subject</SelectItem>
+                {subjects.map((subject) => (
+                  <SelectItem key={subject.id} value={subject.id.toString()}>
+                    {subject.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-12 md:border-t-0 md:border-b">
+              <Label htmlFor="assignment-description" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Description
+              </Label>
+              <Textarea
+                id="assignment-description"
+                value={newDescription}
+                onChange={(event) => setNewDescription(event.target.value)}
+                placeholder="Context, notes, or what needs to get done"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2 p-4 md:col-span-5 lg:col-span-4">
+              <Label htmlFor="assignment-due-date" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Due date
+              </Label>
+              <DatePicker
+                id="assignment-due-date"
+                value={newDueDate}
+                onChange={setNewDueDate}
+                placeholder="Choose a deadline"
+              />
+            </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end border-t border-border/70 px-4 py-4">
             <Button onClick={handleCreate} disabled={!newTitle.trim() || !newSubjectId}>
               Save Assignment
             </Button>
@@ -252,30 +277,32 @@ export default function AssignmentsPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
+          <Select
+            aria-label="Filter assignments by subject"
             value={subjectFilter}
             onChange={(event) => setSubjectFilter(event.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-w-40"
           >
-            <option value="all">All subjects</option>
+            <SelectItem value="all">All subjects</SelectItem>
             {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
+              <SelectItem key={subject.id} value={subject.id.toString()}>
                 {subject.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
+            aria-label="Filter assignments by status"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-w-40"
           >
-            <option value="all">All statuses</option>
+            <SelectItem value="all">All statuses</SelectItem>
             {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
+              <SelectItem key={status} value={status}>
                 {status.replace('_', ' ')}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -371,19 +398,20 @@ export default function AssignmentsPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <select
+                      <Select
+                        aria-label={`Change status for ${assignment.title}`}
                         value={assignment.status}
                         onChange={(event) =>
                           handleStatusChange(assignment.id, event.target.value as AssignmentStatus)
                         }
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="h-9 min-w-36 px-3 text-xs"
                       >
                         {STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>
+                          <SelectItem key={status} value={status}>
                             {status.replace('_', ' ')}
-                          </option>
+                          </SelectItem>
                         ))}
-                      </select>
+                      </Select>
                       <Button variant="ghost" size="icon" onClick={() => handleDelete(assignment.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>

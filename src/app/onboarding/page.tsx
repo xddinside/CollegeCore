@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { createSemester, createSubject } from '@/lib/actions';
@@ -26,7 +25,6 @@ function splitName(name: string) {
 
 export default function OnboardingPage() {
   const { user, isLoaded } = useUser();
-  const router = useRouter();
   const [step, setStep] = useState(1);
   const [displayName, setDisplayName] = useState('');
   const [semester, setSemester] = useState('Sem I');
@@ -34,6 +32,7 @@ export default function OnboardingPage() {
   const [newSubject, setNewSubject] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoaded || !user || displayName) return;
@@ -63,19 +62,26 @@ export default function OnboardingPage() {
     if (!user || !displayName.trim() || subjects.length === 0) return;
 
     setLoading(true);
+    setError(null);
+
     try {
       const { firstName, lastName } = splitName(displayName);
-      await user.update({ firstName, lastName });
+
+      try {
+        await user.update({ firstName, lastName });
+      } catch (profileError) {
+        console.error('Failed to update Clerk profile during onboarding', profileError);
+      }
 
       const createdSemester = await createSemester(user.id, semester);
       await Promise.all(
         subjects.map((s) => createSubject(createdSemester.id, s.name, s.color))
       );
 
-      router.push('/dashboard');
-      router.refresh();
+      window.location.assign('/dashboard');
     } catch (err) {
       console.error(err);
+      setError('Could not finish setting up your semester. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -217,6 +223,10 @@ export default function OnboardingPage() {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
                 )}
               </div>
 

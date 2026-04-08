@@ -12,7 +12,10 @@ import {
   toggleTodo,
 } from '@/lib/actions';
 import { Button } from '@/app/ui/1/components/button';
+import { DatePicker } from '@/app/ui/1/components/date-picker';
 import { Input } from '@/app/ui/1/components/input';
+import { Label } from '@/app/ui/1/components/label';
+import { Select, SelectItem } from '@/app/ui/1/components/select';
 
 interface Todo {
   id: number;
@@ -117,39 +120,55 @@ export default function TodosPage() {
         </p>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-border bg-accent/40 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            placeholder="Add a new todo..."
-            value={newTitle}
-            onChange={(event) => setNewTitle(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && void handleCreate()}
-            className="flex-1"
-          />
-          <Button onClick={handleCreate} disabled={!newTitle.trim()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add
-          </Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            type="date"
-            value={newDueDate}
-            onChange={(event) => setNewDueDate(event.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <select
-            value={newSubjectId ?? ''}
-            onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">No subject</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-background/80">
+        <div className="grid gap-0 md:grid-cols-12">
+          <div className="space-y-2 p-4 md:col-span-7 md:border-r md:border-border/70">
+            <Label htmlFor="todo-title" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Task
+            </Label>
+            <Input
+              id="todo-title"
+              placeholder="Add a new todo..."
+              value={newTitle}
+              onChange={(event) => setNewTitle(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && void handleCreate()}
+              className="flex-1"
+            />
+          </div>
+          <div className="space-y-2 border-t border-border/70 p-4 md:col-span-5 md:border-t-0">
+            <Label htmlFor="todo-subject" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Subject
+            </Label>
+            <Select
+              id="todo-subject"
+              value={newSubjectId?.toString() ?? ''}
+              onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
+            >
+              <SelectItem value="">No subject</SelectItem>
+              {subjects.map((subject) => (
+                <SelectItem key={subject.id} value={subject.id.toString()}>
+                  {subject.name}
+                </SelectItem>
+                ))}
+            </Select>
+          </div>
+          <div className="space-y-2 border-t border-border/70 p-4 md:col-span-4 md:border-t md:border-r md:border-border/70 lg:col-span-3">
+            <Label htmlFor="todo-due-date" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Due date
+            </Label>
+            <DatePicker
+              id="todo-due-date"
+              value={newDueDate}
+              onChange={setNewDueDate}
+              placeholder="Add a target date"
+            />
+          </div>
+          <div className="flex items-end justify-end border-t border-border/70 p-4 md:col-span-8 md:border-t lg:col-span-9">
+            <Button onClick={handleCreate} disabled={!newTitle.trim()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Todo
+            </Button>
+          </div>
         </div>
       </div>
 

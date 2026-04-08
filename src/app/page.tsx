@@ -21,7 +21,7 @@ export default async function HomePage() {
       {/* Subtle gradient background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(120,120,120,0.08),transparent)]" />
       
-      <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col justify-center px-6 py-20 md:px-12">
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-6 py-20 md:px-16 lg:px-24">
         <AnimatedHomeContent />
       </div>
     </main>

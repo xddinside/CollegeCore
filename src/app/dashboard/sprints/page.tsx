@@ -15,7 +15,12 @@ import {
 } from '@/lib/actions';
 import { Badge } from '@/app/ui/1/components/badge';
 import { Button } from '@/app/ui/1/components/button';
+import { DatePicker } from '@/app/ui/1/components/date-picker';
 import { Input } from '@/app/ui/1/components/input';
+import { Label } from '@/app/ui/1/components/label';
+import { Select, SelectItem } from '@/app/ui/1/components/select';
+import { Textarea } from '@/app/ui/1/components/textarea';
+import { TimePicker } from '@/app/ui/1/components/time-picker';
 
 interface ExamSprint {
   id: number;
@@ -95,8 +100,8 @@ export default function SprintsPage() {
   const [newStartDate, setNewStartDate] = useState('');
   const [newEndDate, setNewEndDate] = useState('');
   const [newDate, setNewDate] = useState('');
-  const [newStartTime, setNewStartTime] = useState('');
-  const [newEndTime, setNewEndTime] = useState('');
+  const [newStartTime, setNewStartTime] = useState('09:00');
+  const [newEndTime, setNewEndTime] = useState('10:00');
   const [newSubjectId, setNewSubjectId] = useState<number | null>(null);
   const [newNotes, setNewNotes] = useState('');
   const [loading, setLoading] = useState(true);
@@ -171,8 +176,8 @@ export default function SprintsPage() {
     );
 
     setNewDate('');
-    setNewStartTime('');
-    setNewEndTime('');
+    setNewStartTime('09:00');
+    setNewEndTime('10:00');
     setNewSubjectId(null);
     setNewNotes('');
     setShowSessionForm(null);
@@ -221,28 +226,46 @@ export default function SprintsPage() {
       </div>
 
       {showSprintForm && (
-        <div className="space-y-4 rounded-xl border border-border bg-accent/40 p-5">
-          <Input
-            placeholder="Sprint name"
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            autoFocus
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              type="date"
-              value={newStartDate}
-              onChange={(event) => setNewStartDate(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <input
-              type="date"
-              value={newEndDate}
-              onChange={(event) => setNewEndDate(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-background/80">
+          <div className="grid gap-0 md:grid-cols-12">
+            <div className="space-y-2 p-4 md:col-span-6 md:border-r md:border-border/70">
+              <Label htmlFor="sprint-name" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Sprint name
+              </Label>
+              <Input
+                id="sprint-name"
+                placeholder="Sprint name"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-3 md:border-t-0 md:border-r md:border-border/70">
+              <Label htmlFor="sprint-start-date" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Start date
+              </Label>
+              <DatePicker
+                id="sprint-start-date"
+                value={newStartDate}
+                onChange={setNewStartDate}
+                placeholder="Choose a start"
+                max={newEndDate || undefined}
+              />
+            </div>
+            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-3 md:border-t-0">
+              <Label htmlFor="sprint-end-date" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                End date
+              </Label>
+              <DatePicker
+                id="sprint-end-date"
+                value={newEndDate}
+                onChange={setNewEndDate}
+                placeholder="Choose an end"
+                min={newStartDate || undefined}
+              />
+            </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end border-t border-border/70 px-4 py-4">
             <Button onClick={handleCreateSprint} disabled={!newName.trim() || !newStartDate || !newEndDate}>
               Save Sprint
             </Button>
@@ -302,49 +325,72 @@ export default function SprintsPage() {
                       </div>
 
                       {showSessionForm === sprint.id && (
-                        <div className="space-y-3 rounded-lg border border-border bg-background p-4">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <input
-                              type="date"
-                              value={newDate}
-                              onChange={(event) => setNewDate(event.target.value)}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                            <select
-                              value={newSubjectId ?? ''}
-                              onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              <option value="">Select subject</option>
-                              {subjects.map((subject) => (
-                                <option key={subject.id} value={subject.id}>
-                                  {subject.name}
-                                </option>
-                              ))}
-                            </select>
+                        <div className="overflow-hidden rounded-xl border border-border/80 bg-background/80">
+                          <div className="grid gap-0 md:grid-cols-12">
+                            <div className="space-y-2 p-4 md:col-span-3 md:border-r md:border-border/70">
+                              <Label htmlFor={`session-date-${sprint.id}`} className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                Session date
+                              </Label>
+                              <DatePicker
+                                id={`session-date-${sprint.id}`}
+                                value={newDate}
+                                onChange={setNewDate}
+                                placeholder="Choose a study date"
+                              />
+                            </div>
+                            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-3 md:border-t-0 md:border-r md:border-border/70">
+                              <Label htmlFor={`session-subject-${sprint.id}`} className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                Subject
+                              </Label>
+                              <Select
+                                id={`session-subject-${sprint.id}`}
+                                value={newSubjectId?.toString() ?? ''}
+                                onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
+                              >
+                                <SelectItem value="">Select subject</SelectItem>
+                                {subjects.map((subject) => (
+                                  <SelectItem key={subject.id} value={subject.id.toString()}>
+                                    {subject.name}
+                                  </SelectItem>
+                                ))}
+                              </Select>
+                            </div>
+                            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-3 md:border-t-0 md:border-r md:border-border/70">
+                              <Label htmlFor={`session-start-time-${sprint.id}`} className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                Start
+                              </Label>
+                              <TimePicker
+                                id={`session-start-time-${sprint.id}`}
+                                value={newStartTime}
+                                onChange={setNewStartTime}
+                                placeholder="Pick a start"
+                              />
+                            </div>
+                            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-3 md:border-t-0">
+                              <Label htmlFor={`session-end-time-${sprint.id}`} className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                End
+                              </Label>
+                              <TimePicker
+                                id={`session-end-time-${sprint.id}`}
+                                value={newEndTime}
+                                onChange={setNewEndTime}
+                                placeholder="Pick an end"
+                              />
+                            </div>
+                            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-12">
+                              <Label htmlFor={`session-notes-${sprint.id}`} className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                Notes
+                              </Label>
+                              <Textarea
+                                id={`session-notes-${sprint.id}`}
+                                value={newNotes}
+                                onChange={(event) => setNewNotes(event.target.value)}
+                                rows={3}
+                                placeholder="What are you covering in this block?"
+                              />
+                            </div>
                           </div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <input
-                              type="time"
-                              value={newStartTime}
-                              onChange={(event) => setNewStartTime(event.target.value)}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                            <input
-                              type="time"
-                              value={newEndTime}
-                              onChange={(event) => setNewEndTime(event.target.value)}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                          </div>
-                          <textarea
-                            value={newNotes}
-                            onChange={(event) => setNewNotes(event.target.value)}
-                            rows={3}
-                            placeholder="Notes (optional)"
-                            className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                          <div className="flex justify-end">
+                          <div className="flex justify-end border-t border-border/70 px-4 py-4">
                             <Button
                               onClick={() => handleCreateSession(sprint.id)}
                               disabled={!newDate || !newStartTime || !newEndTime || !newSubjectId}
