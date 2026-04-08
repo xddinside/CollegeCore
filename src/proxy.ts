@@ -1,0 +1,22 @@
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/ui(.*)',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/api/webhooks(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  if (!isPublicRoute(req)) {
+    auth.protect();
+  }
+});
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^.]*\\.(?:js|css|woff|woff2|ttf|ttc|icon|png|jpg|webp|gif|svg)).*)',
+    '/(api|trpc)(.*)',
+  ],
+};

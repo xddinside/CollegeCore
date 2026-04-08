@@ -1,0 +1,37 @@
+name: Production DB Migrate
+
+on:
+  deployment_status:
+  workflow_dispatch:
+
+concurrency:
+  group: production-db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && (github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'production')) }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Drizzle migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL_CA: ${{ secrets.DATABASE_SSL_CA }}
+          DATABASE_SSL_REJECT_UNAUTHORIZED: ${{ secrets.DATABASE_SSL_REJECT_UNAUTHORIZED || 'true' }}
+        run: npm run db:migrate

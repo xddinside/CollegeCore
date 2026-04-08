@@ -1,0 +1,400 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
+import {
+  Calendar,
+  CheckCircle2,
+  Circle,
+  FileText,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import {
+  createAssignment,
+  deleteAssignment,
+  getAllAssignments,
+  getCurrentSemester,
+  getSemesterSubjects,
+  updateAssignmentStatus,
+} from '@/lib/actions';
+import { getDueStatus } from '@/lib/utils';
+import { Badge } from '@/app/ui/1/components/badge';
+import { Button } from '@/app/ui/1/components/button';
+import { Input } from '@/app/ui/1/components/input';
+
+const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
+
+type AssignmentStatus = (typeof STATUS_OPTIONS)[number];
+
+interface Assignment {
+  id: number;
+  title: string;
+  description: string | null;
+  dueDate: Date | string | null;
+  status: AssignmentStatus;
+  subjectName: string;
+  subjectColor: string;
+  subjectId: number;
+}
+
+interface Subject {
+  id: number;
+  name: string;
+  color: string;
+}
+
+function getStatusIcon(status: AssignmentStatus) {
+  return status === 'COMPLETED' ? (
+    <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+  ) : (
+    <Circle className="h-5 w-5 text-muted-foreground" />
+  );
+}
+
+function formatDate(dateValue: Date | string | null) {
+  if (!dateValue) {
+    return 'No due date';
+  }
+
+  const status = getDueStatus(dateValue);
+  const date = new Date(dateValue);
+
+  if (status === 'overdue') return 'Overdue';
+  if (status === 'today') return 'Today';
+
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const current = new Date(date);
+  current.setHours(0, 0, 0, 0);
+
+  if (current.getTime() === tomorrow.getTime()) {
+    return 'Tomorrow';
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export default function AssignmentsPage() {
+  const { user, isLoaded } = useUser();
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
+  const [newSubjectId, setNewSubjectId] = useState<number | null>(null);
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isLoaded || !user) return;
+
+    void (async () => {
+      const semester = await getCurrentSemester(user.id);
+      if (!semester) return;
+
+      const [loadedSubjects, loadedAssignments] = await Promise.all([
+        getSemesterSubjects(semester.id),
+        getAllAssignments(semester.id),
+      ]);
+
+      setSubjects(loadedSubjects);
+      setAssignments(loadedAssignments);
+      setLoading(false);
+    })();
+  }, [isLoaded, user]);
+
+  async function loadData() {
+    if (!user) return;
+
+    const semester = await getCurrentSemester(user.id);
+    if (!semester) return;
+
+    const [loadedSubjects, loadedAssignments] = await Promise.all([
+      getSemesterSubjects(semester.id),
+      getAllAssignments(semester.id),
+    ]);
+
+    setSubjects(loadedSubjects);
+    setAssignments(loadedAssignments);
+    setLoading(false);
+  }
+
+  async function handleCreate() {
+    if (!newTitle.trim() || !newSubjectId) return;
+
+    await createAssignment(
+      newSubjectId,
+      newTitle.trim(),
+      newDescription.trim() || null,
+      newDueDate ? new Date(newDueDate) : null
+    );
+
+    setNewTitle('');
+    setNewDescription('');
+    setNewDueDate('');
+    setNewSubjectId(null);
+    setShowForm(false);
+    await loadData();
+  }
+
+  async function handleStatusChange(id: number, status: AssignmentStatus) {
+    await updateAssignmentStatus(id, status);
+    await loadData();
+  }
+
+  async function handleDelete(id: number) {
+    await deleteAssignment(id);
+    await loadData();
+  }
+
+  const filteredAssignments = assignments.filter((assignment) => {
+    if (subjectFilter !== 'all' && assignment.subjectId !== Number(subjectFilter)) {
+      return false;
+    }
+
+    if (statusFilter !== 'all' && assignment.status !== statusFilter) {
+      return false;
+    }
+
+    if (
+      search &&
+      !`${assignment.title} ${assignment.subjectName} ${assignment.description ?? ''}`
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const todoCount = filteredAssignments.filter((assignment) => assignment.status === 'TODO').length;
+  const inProgressCount = filteredAssignments.filter((assignment) => assignment.status === 'IN_PROGRESS').length;
+  const completedCount = filteredAssignments.filter((assignment) => assignment.status === 'COMPLETED').length;
+
+  if (!isLoaded || loading) {
+    return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+  }
+
+  return (
+    <div className="animate-fade-in space-y-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-medium tracking-tight">Assignments</h1>
+          <p className="mt-1 text-muted-foreground">
+            {todoCount} to do · {inProgressCount} in progress · {completedCount} completed
+          </p>
+        </div>
+        <Button onClick={() => setShowForm((open) => !open)}>
+          <Plus className="mr-2 h-4 w-4" />
+          {showForm ? 'Close Form' : 'New Assignment'}
+        </Button>
+      </div>
+
+      {showForm && (
+        <div className="space-y-4 rounded-xl border border-border bg-accent/40 p-5">
+          <Input
+            placeholder="Assignment title"
+            value={newTitle}
+            onChange={(event) => setNewTitle(event.target.value)}
+            autoFocus
+          />
+          <textarea
+            value={newDescription}
+            onChange={(event) => setNewDescription(event.target.value)}
+            placeholder="Description (optional)"
+            rows={3}
+            className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              type="date"
+              value={newDueDate}
+              onChange={(event) => setNewDueDate(event.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <select
+              value={newSubjectId ?? ''}
+              onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Select subject</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={handleCreate} disabled={!newTitle.trim() || !newSubjectId}>
+              Save Assignment
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search assignments..."
+            className="pl-9"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={subjectFilter}
+            onChange={(event) => setSubjectFilter(event.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="all">All subjects</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="all">All statuses</option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {status.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {filteredAssignments.length === 0 ? (
+        <div className="empty-state">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
+            <FileText className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-medium text-foreground">No assignments</h3>
+          <p className="mt-1">Create your first assignment to get started.</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {filteredAssignments.map((assignment) => {
+            const formattedDate = formatDate(assignment.dueDate);
+
+            return (
+              <div
+                key={assignment.id}
+                className={`group -mx-4 flex items-start gap-4 rounded-lg px-4 py-4 transition-colors hover:bg-accent/50 ${
+                  assignment.status === 'COMPLETED' ? 'opacity-50' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  className="mt-0.5"
+                  onClick={() =>
+                    handleStatusChange(
+                      assignment.id,
+                      assignment.status === 'COMPLETED' ? 'TODO' : 'COMPLETED'
+                    )
+                  }
+                  aria-label={`Mark ${assignment.title} as ${assignment.status === 'COMPLETED' ? 'todo' : 'completed'}`}
+                >
+                  {getStatusIcon(assignment.status)}
+                </button>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={
+                            assignment.status === 'COMPLETED'
+                              ? 'font-medium text-muted-foreground line-through'
+                              : 'font-medium'
+                          }
+                        >
+                          {assignment.title}
+                        </span>
+                        {assignment.status === 'IN_PROGRESS' && <Badge variant="secondary">In Progress</Badge>}
+                        {formattedDate === 'Overdue' && assignment.status !== 'COMPLETED' && (
+                          <Badge variant="destructive">Overdue</Badge>
+                        )}
+                        {formattedDate === 'Today' && assignment.status !== 'COMPLETED' && (
+                          <Badge variant="warning">Today</Badge>
+                        )}
+                      </div>
+                      {assignment.description && (
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                          {assignment.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span
+                          className={
+                            formattedDate === 'Overdue'
+                              ? 'font-medium text-destructive'
+                              : formattedDate === 'Today'
+                                ? 'font-medium text-warning'
+                                : ''
+                          }
+                        >
+                          {formattedDate}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: assignment.subjectColor }}
+                        />
+                        <span className="text-sm text-muted-foreground">{assignment.subjectName}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={assignment.status}
+                        onChange={(event) =>
+                          handleStatusChange(assignment.id, event.target.value as AssignmentStatus)
+                        }
+                        className="h-8 rounded-md border border-input bg-background px-2 text-xs transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status.replace('_', ' ')}
+                          </option>
+                        ))}
+                      </select>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(assignment.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
