@@ -1,6 +1,6 @@
 import {
   getAllAssignments,
-  getCurrentSemester,
+  getCachedCurrentSemester,
   getExamSprints,
   getSemesterSubjects,
   getSprintSessions,
@@ -88,7 +88,7 @@ export interface SprintsPageData {
 }
 
 export async function getTodosPageData(clerkId: string): Promise<TodosPageData> {
-  const semester = await getCurrentSemester(clerkId);
+  const semester = await getCachedCurrentSemester(clerkId);
 
   if (!semester) {
     throw new Error('No current semester found');
@@ -107,7 +107,7 @@ export async function getTodosPageData(clerkId: string): Promise<TodosPageData> 
 }
 
 export async function getAssignmentsPageData(clerkId: string): Promise<AssignmentsPageData> {
-  const semester = await getCurrentSemester(clerkId);
+  const semester = await getCachedCurrentSemester(clerkId);
 
   if (!semester) {
     throw new Error('No current semester found');
@@ -126,7 +126,7 @@ export async function getAssignmentsPageData(clerkId: string): Promise<Assignmen
 }
 
 export async function getSubjectsPageData(clerkId: string): Promise<SubjectsPageData> {
-  const semester = await getCurrentSemester(clerkId);
+  const semester = await getCachedCurrentSemester(clerkId);
 
   if (!semester) {
     throw new Error('No current semester found');
@@ -149,7 +149,7 @@ export async function getSubjectsPageData(clerkId: string): Promise<SubjectsPage
 }
 
 export async function getSprintsPageData(clerkId: string): Promise<SprintsPageData> {
-  const semester = await getCurrentSemester(clerkId);
+  const semester = await getCachedCurrentSemester(clerkId);
 
   if (!semester) {
     throw new Error('No current semester found');

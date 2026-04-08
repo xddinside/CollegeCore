@@ -1,5 +1,6 @@
 'use server';
 
+import { cache } from 'react';
 import { db } from '@/db';
 import { users, semesters, subjects, assignments, todos, examSprints, sprintSessions, attachments } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -21,6 +22,10 @@ export async function getCurrentSemester(clerkId: string) {
   ).limit(1);
   return result[0] || null;
 }
+
+export const getCachedCurrentSemester = cache(async (clerkId: string) => {
+  return getCurrentSemester(clerkId);
+});
 
 export async function createSemester(clerkId: string, name: string) {
   await db.update(semesters).set({ isCurrent: false }).where(eq(semesters.userId, clerkId));
