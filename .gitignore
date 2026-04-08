@@ -42,3 +42,10 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# local screenshots and temp captures
+/tmp/
+/ui-1-hero.png
+/ui-1-preview.png
+/ui2-dashboard.png
+/ui2-landing.png
