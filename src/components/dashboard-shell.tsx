@@ -73,6 +73,36 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
     });
   }, [queryClient, router, user]);
 
+  function handleNavHover(href: string) {
+    if (!user) {
+      return;
+    }
+
+    router.prefetch(href);
+
+    if (href === '/dashboard/assignments') {
+      void queryClient.prefetchQuery({
+        queryKey: dashboardQueryKeys.assignments(user.id),
+        queryFn: () => getAssignmentsPageData(user.id),
+      });
+    } else if (href === '/dashboard/todos') {
+      void queryClient.prefetchQuery({
+        queryKey: dashboardQueryKeys.todos(user.id),
+        queryFn: () => getTodosPageData(user.id),
+      });
+    } else if (href === '/dashboard/subjects') {
+      void queryClient.prefetchQuery({
+        queryKey: dashboardQueryKeys.subjects(user.id),
+        queryFn: () => getSubjectsPageData(user.id),
+      });
+    } else if (href === '/dashboard/sprints') {
+      void queryClient.prefetchQuery({
+        queryKey: dashboardQueryKeys.sprints(user.id),
+        queryFn: () => getSprintsPageData(user.id),
+      });
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 flex items-center justify-between border-b border-border/50 bg-background px-4 py-3 md:hidden">
@@ -98,22 +128,20 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                 const Icon = item.icon;
                 const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-accent text-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                );
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onMouseEnter={() => handleNavHover(item.href)}
+                  className={cn(
+                    'flex min-w-[64px] flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors',
+                    isActive ? 'text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="sr-only">{item.label}</span>
+                </Link>
+              );
               })}
             </nav>
             <div className="border-t border-border/50 p-4">
@@ -142,21 +170,23 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    onMouseEnter={() => handleNavHover(item.href)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
           })}
         </nav>
 
@@ -177,24 +207,27 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background md:hidden">
         <div className="flex items-center justify-around py-2">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex min-w-[64px] flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors',
-                  isActive ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="sr-only">{item.label}</span>
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onMouseEnter={() => handleNavHover(item.href)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
         </div>
       </nav>
     </div>
