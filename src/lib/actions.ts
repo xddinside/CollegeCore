@@ -165,8 +165,9 @@ export async function createTodo(
   subjectId: number | null,
   dueDate: Date | null
 ) {
-  await db.insert(todos).values({ semesterId, subjectId, title, dueDate });
+  const [{ id }] = await db.insert(todos).values({ semesterId, subjectId, title, dueDate }).$returningId();
   revalidatePath('/dashboard');
+  return { id, semesterId, title, subjectId, dueDate, isCompleted: false };
 }
 
 export async function toggleTodo(id: number) {
@@ -227,15 +228,16 @@ export async function createSprintSession(
   subjectId: number,
   notes: string | null
 ) {
-  await db.insert(sprintSessions).values({
+  const [{ id }] = await db.insert(sprintSessions).values({
     sprintId,
     date,
     startTime,
     endTime,
     subjectId,
     notes,
-  });
+  }).$returningId();
   revalidatePath('/dashboard');
+  return { id, sprintId, date, startTime, endTime, subjectId, notes };
 }
 
 export async function deleteSprintSession(id: number) {

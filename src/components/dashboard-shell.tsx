@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
   Calendar,
@@ -14,6 +15,13 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import {
+  getAssignmentsPageData,
+  getSprintsPageData,
+  getSubjectsPageData,
+  getTodosPageData,
+} from '@/lib/dashboard-queries';
+import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -32,9 +40,38 @@ type DashboardShellProps = {
 
 export function DashboardShell({ children, semesterName }: DashboardShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useUser();
   const displayName = user?.firstName || user?.fullName || 'Student';
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    for (const item of NAV_ITEMS) {
+      router.prefetch(item.href);
+    }
+
+    void queryClient.prefetchQuery({
+      queryKey: dashboardQueryKeys.assignments(user.id),
+      queryFn: () => getAssignmentsPageData(user.id),
+    });
+    void queryClient.prefetchQuery({
+      queryKey: dashboardQueryKeys.todos(user.id),
+      queryFn: () => getTodosPageData(user.id),
+    });
+    void queryClient.prefetchQuery({
+      queryKey: dashboardQueryKeys.subjects(user.id),
+      queryFn: () => getSubjectsPageData(user.id),
+    });
+    void queryClient.prefetchQuery({
+      queryKey: dashboardQueryKeys.sprints(user.id),
+      queryFn: () => getSprintsPageData(user.id),
+    });
+  }, [queryClient, router, user]);
 
   return (
     <div className="min-h-screen bg-background">

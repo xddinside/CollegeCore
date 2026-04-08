@@ -7,11 +7,9 @@ import { ListTodo, Plus, Trash2 } from 'lucide-react';
 import {
   createTodo,
   deleteTodo,
-  getCurrentSemester,
-  getSemesterSubjects,
-  getTodos,
   setTodoCompleted,
 } from '@/lib/actions';
+import { getTodosPageData, type TodosPageData } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -19,46 +17,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectItem } from '@/components/ui/select';
 
-interface Todo {
-  id: number;
+type CreateTodoInput = {
   title: string;
-  dueDate: Date | string | null;
-  isCompleted: boolean;
+  dueDate: string;
   subjectId: number | null;
-  subjectName: string | null;
-  subjectColor: string | null;
-}
-
-interface Subject {
-  id: number;
-  name: string;
-  color: string;
-}
-
-interface TodosPageData {
-  semesterId: number;
-  subjects: Subject[];
-  todos: Todo[];
-}
-
-async function getTodosPageData(clerkId: string): Promise<TodosPageData> {
-  const semester = await getCurrentSemester(clerkId);
-
-  if (!semester) {
-    throw new Error('No current semester found');
-  }
-
-  const [subjects, todos] = await Promise.all([
-    getSemesterSubjects(semester.id),
-    getTodos(semester.id),
-  ]);
-
-  return {
-    semesterId: semester.id,
-    subjects,
-    todos,
-  };
-}
+};
 
 export default function TodosPage() {
   const { user, isLoaded } = useUser();
@@ -75,23 +38,86 @@ export default function TodosPage() {
   });
 
   const createTodoMutation = useMutation({
-    mutationFn: async () => {
-      if (!todosQuery.data || !newTitle.trim()) {
-        return;
+    mutationFn: async (variables: CreateTodoInput) => {
+      if (!todosQuery.data) {
+        throw new Error('Todos data not loaded');
       }
 
-      await createTodo(
+      return createTodo(
         todosQuery.data.semesterId,
-        newTitle.trim(),
-        newSubjectId,
-        newDueDate ? new Date(newDueDate) : null
+        variables.title,
+        variables.subjectId,
+        variables.dueDate ? new Date(variables.dueDate) : null
       );
     },
-    onSuccess: async () => {
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: todosQueryKey });
+
+      const previousData = queryClient.getQueryData<TodosPageData>(todosQueryKey);
+      const tempId = -Date.now();
+      const subject = previousData?.subjects.find((item) => item.id === variables.subjectId) ?? null;
+
       setNewTitle('');
       setNewDueDate('');
       setNewSubjectId(null);
-      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
+
+      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          todos: [
+            {
+              id: tempId,
+              title: variables.title,
+              dueDate: variables.dueDate || null,
+              isCompleted: false,
+              subjectId: variables.subjectId,
+              subjectName: subject?.name ?? null,
+              subjectColor: subject?.color ?? null,
+              isPending: true,
+            },
+            ...current.todos,
+          ],
+        };
+      });
+
+      return { previousData, tempId, variables };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(todosQueryKey, context.previousData);
+      }
+
+      if (context?.variables) {
+        setNewTitle(context.variables.title);
+        setNewDueDate(context.variables.dueDate);
+        setNewSubjectId(context.variables.subjectId);
+      }
+    },
+    onSuccess: (createdTodo, _variables, context) => {
+      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
+        if (!current || !context) {
+          return current;
+        }
+
+        return {
+          ...current,
+          todos: current.todos.map((todo) =>
+            todo.id === context.tempId
+              ? {
+                  ...todo,
+                  id: createdTodo.id,
+                  isPending: false,
+                }
+              : todo
+          ),
+        };
+      });
+
+      void queryClient.invalidateQueries({ queryKey: todosQueryKey });
     },
   });
 
@@ -130,8 +156,31 @@ export default function TodosPage() {
 
   const deleteTodoMutation = useMutation({
     mutationFn: (id: number) => deleteTodo(id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: todosQueryKey });
+
+      const previousData = queryClient.getQueryData<TodosPageData>(todosQueryKey);
+
+      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          todos: current.todos.filter((todo) => todo.id !== id),
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(todosQueryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: todosQueryKey });
     },
   });
 
@@ -169,7 +218,11 @@ export default function TodosPage() {
               onChange={(event) => setNewTitle(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && newTitle.trim()) {
-                  createTodoMutation.mutate();
+                  createTodoMutation.mutate({
+                    title: newTitle.trim(),
+                    dueDate: newDueDate,
+                    subjectId: newSubjectId,
+                  });
                 }
               }}
               className="flex-1"
@@ -204,7 +257,16 @@ export default function TodosPage() {
             />
           </div>
           <div className="flex items-end justify-end border-t border-border/70 p-4 md:col-span-8 md:border-t lg:col-span-9">
-            <Button onClick={() => createTodoMutation.mutate()} disabled={!newTitle.trim() || createTodoMutation.isPending}>
+            <Button
+              onClick={() =>
+                createTodoMutation.mutate({
+                  title: newTitle.trim(),
+                  dueDate: newDueDate,
+                  subjectId: newSubjectId,
+                })
+              }
+              disabled={!newTitle.trim() || createTodoMutation.isPending}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Todo
             </Button>
@@ -237,6 +299,7 @@ export default function TodosPage() {
                     isCompleted: !todo.isCompleted,
                   })
                 }
+                disabled={todo.isPending}
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
                   todo.isCompleted
                     ? 'border-primary bg-primary'
@@ -289,6 +352,7 @@ export default function TodosPage() {
               <button
                 type="button"
                 onClick={() => deleteTodoMutation.mutate(todo.id)}
+                disabled={todo.isPending}
                 className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
                 aria-label={`Delete ${todo.title}`}
               >

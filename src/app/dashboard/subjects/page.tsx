@@ -1,31 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import {
   createSubject,
   deleteSubject,
-  getAllAssignments,
-  getCurrentSemester,
-  getSemesterSubjects,
   updateSubject,
 } from '@/lib/actions';
+import {
+  getSubjectsPageData,
+  type SubjectsPageData,
+} from '@/lib/dashboard-queries';
+import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface Subject {
-  id: number;
+type SaveSubjectInput = {
+  id: number | null;
   name: string;
   color: string;
-}
-
-interface Assignment {
-  id: number;
-  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
-  subjectId: number;
-}
+};
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
@@ -35,98 +32,153 @@ const PRESET_COLORS = [
 
 export default function SubjectsPage() {
   const { user, isLoaded } = useUser();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!isLoaded || !user) return;
+  const subjectsQueryKey = user ? dashboardQueryKeys.subjects(user.id) : ['dashboard', 'subjects', 'anonymous'];
+  const subjectsQuery = useQuery({
+    queryKey: subjectsQueryKey,
+    queryFn: () => getSubjectsPageData(user!.id),
+    enabled: isLoaded && !!user,
+  });
 
-    void (async () => {
-      const semester = await getCurrentSemester(user.id);
-      if (!semester) return;
+  const saveSubjectMutation = useMutation({
+    mutationFn: async (variables: SaveSubjectInput) => {
+      if (!subjectsQuery.data) {
+        throw new Error('Subjects data not loaded');
+      }
 
-      const [loadedSubjects, loadedAssignments] = await Promise.all([
-        getSemesterSubjects(semester.id),
-        getAllAssignments(semester.id),
-      ]);
+      if (variables.id) {
+        await updateSubject(variables.id, variables.name, variables.color);
+        return null;
+      }
 
-      setSubjects(loadedSubjects);
-      setAssignments(
-        loadedAssignments.map((assignment) => ({
-          id: assignment.id,
-          subjectId: assignment.subjectId,
-          status: assignment.status,
-        }))
-      );
-      setLoading(false);
-    })();
-  }, [isLoaded, user]);
+      return createSubject(subjectsQuery.data.semesterId, variables.name, variables.color);
+    },
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: subjectsQueryKey });
 
-  async function loadData() {
-    if (!user) return;
+      const previousData = queryClient.getQueryData<SubjectsPageData>(subjectsQueryKey);
+      const tempId = variables.id ? null : -Date.now();
 
-    const semester = await getCurrentSemester(user.id);
-    if (!semester) return;
+      setNewName('');
+      setNewColor(PRESET_COLORS[0]);
+      setShowForm(false);
+      setEditId(null);
 
-    const [loadedSubjects, loadedAssignments] = await Promise.all([
-      getSemesterSubjects(semester.id),
-      getAllAssignments(semester.id),
-    ]);
+      queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
 
-    setSubjects(loadedSubjects);
-    setAssignments(
-      loadedAssignments.map((assignment) => ({
-        id: assignment.id,
-        subjectId: assignment.subjectId,
-        status: assignment.status,
-      }))
-    );
-    setLoading(false);
-  }
+        if (variables.id) {
+          return {
+            ...current,
+            subjects: current.subjects.map((subject) =>
+              subject.id === variables.id
+                ? { ...subject, name: variables.name, color: variables.color }
+                : subject
+            ),
+          };
+        }
 
-  async function handleSubmit() {
-    if (!newName.trim() || !user) return;
+        return {
+          ...current,
+          subjects: [
+            {
+              id: tempId!,
+              name: variables.name,
+              color: variables.color,
+              isPending: true,
+            },
+            ...current.subjects,
+          ],
+        };
+      });
 
-    const semester = await getCurrentSemester(user.id);
-    if (!semester) return;
+      return { previousData, tempId, variables };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(subjectsQueryKey, context.previousData);
+      }
 
-    if (editId) {
-      await updateSubject(editId, newName.trim(), newColor);
-    } else {
-      await createSubject(semester.id, newName.trim(), newColor);
-    }
+      if (context?.variables) {
+        setNewName(context.variables.name);
+        setNewColor(context.variables.color);
+        setEditId(context.variables.id);
+        setShowForm(true);
+      }
+    },
+    onSuccess: (createdSubject, variables, context) => {
+      if (!variables.id && createdSubject && context?.tempId) {
+        queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
+          if (!current) {
+            return current;
+          }
 
-    setNewName('');
-    setNewColor(PRESET_COLORS[0]);
-    setShowForm(false);
-    setEditId(null);
-    await loadData();
-  }
+          return {
+            ...current,
+            subjects: current.subjects.map((subject) =>
+              subject.id === context.tempId
+                ? { ...subject, id: createdSubject.id, isPending: false }
+                : subject
+            ),
+          };
+        });
+      }
 
-  function handleEdit(subject: Subject) {
-    setNewName(subject.name);
-    setNewColor(subject.color);
-    setEditId(subject.id);
-    setShowForm(true);
-  }
+      void queryClient.invalidateQueries({ queryKey: subjectsQueryKey });
+    },
+  });
 
-  async function handleDelete(id: number) {
-    await deleteSubject(id);
-    await loadData();
-  }
+  const deleteSubjectMutation = useMutation({
+    mutationFn: (id: number) => deleteSubject(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: subjectsQueryKey });
+
+      const previousData = queryClient.getQueryData<SubjectsPageData>(subjectsQueryKey);
+
+      queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          subjects: current.subjects.filter((subject) => subject.id !== id),
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(subjectsQueryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: subjectsQueryKey });
+    },
+  });
+
+  const subjects = subjectsQuery.data?.subjects ?? [];
+  const assignments = subjectsQuery.data?.assignments ?? [];
 
   const filteredSubjects = subjects.filter((subject) =>
     subject.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (!isLoaded || loading) {
+  if (!isLoaded || subjectsQuery.isLoading) {
     return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+  }
+
+  if (subjectsQuery.isError) {
+    return <div className="py-8 text-sm text-destructive">Unable to load subjects.</div>;
   }
 
   return (
@@ -182,7 +234,16 @@ export default function SubjectsPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={handleSubmit} disabled={!newName.trim()}>
+            <Button
+              onClick={() =>
+                saveSubjectMutation.mutate({
+                  id: editId,
+                  name: newName.trim(),
+                  color: newColor,
+                })
+              }
+              disabled={!newName.trim() || saveSubjectMutation.isPending}
+            >
               {editId ? 'Update Subject' : 'Save Subject'}
             </Button>
           </div>
@@ -237,10 +298,15 @@ export default function SubjectsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(subject)}>
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      setNewName(subject.name);
+                      setNewColor(subject.color);
+                      setEditId(subject.id);
+                      setShowForm(true);
+                    }} disabled={subject.isPending}>
                       <PencilLine className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(subject.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => deleteSubjectMutation.mutate(subject.id)} disabled={subject.isPending}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

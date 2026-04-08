@@ -15,11 +15,12 @@ import {
 import {
   createAssignment,
   deleteAssignment,
-  getAllAssignments,
-  getCurrentSemester,
-  getSemesterSubjects,
   updateAssignmentStatus,
 } from '@/lib/actions';
+import {
+  getAssignmentsPageData,
+  type AssignmentsPageData,
+} from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { getDueStatus } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -34,28 +35,12 @@ const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
 
 type AssignmentStatus = (typeof STATUS_OPTIONS)[number];
 
-interface Assignment {
-  id: number;
+type CreateAssignmentInput = {
   title: string;
-  description: string | null;
-  dueDate: Date | string | null;
-  status: AssignmentStatus;
-  subjectName: string;
-  subjectColor: string;
+  description: string;
+  dueDate: string;
   subjectId: number;
-}
-
-interface Subject {
-  id: number;
-  name: string;
-  color: string;
-}
-
-interface AssignmentsPageData {
-  semesterId: number;
-  subjects: Subject[];
-  assignments: Assignment[];
-}
+};
 
 function getStatusIcon(status: AssignmentStatus) {
   return status === 'COMPLETED' ? (
@@ -90,25 +75,6 @@ function formatDate(dateValue: Date | string | null) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-async function getAssignmentsPageData(clerkId: string): Promise<AssignmentsPageData> {
-  const semester = await getCurrentSemester(clerkId);
-
-  if (!semester) {
-    throw new Error('No current semester found');
-  }
-
-  const [subjects, assignments] = await Promise.all([
-    getSemesterSubjects(semester.id),
-    getAllAssignments(semester.id),
-  ]);
-
-  return {
-    semesterId: semester.id,
-    subjects,
-    assignments,
-  };
-}
-
 export default function AssignmentsPage() {
   const { user, isLoaded } = useUser();
   const queryClient = useQueryClient();
@@ -131,25 +97,86 @@ export default function AssignmentsPage() {
   });
 
   const createAssignmentMutation = useMutation({
-    mutationFn: async () => {
-      if (!newTitle.trim() || !newSubjectId) {
-        return;
-      }
+    mutationFn: (variables: CreateAssignmentInput) =>
+      createAssignment(
+        variables.subjectId,
+        variables.title,
+        variables.description.trim() || null,
+        variables.dueDate ? new Date(variables.dueDate) : null
+      ),
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
 
-      await createAssignment(
-        newSubjectId,
-        newTitle.trim(),
-        newDescription.trim() || null,
-        newDueDate ? new Date(newDueDate) : null
-      );
-    },
-    onSuccess: async () => {
+      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
+      const tempId = -Date.now();
+      const subject = previousData?.subjects.find((item) => item.id === variables.subjectId);
+
       setNewTitle('');
       setNewDescription('');
       setNewDueDate('');
       setNewSubjectId(null);
       setShowForm(false);
-      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+
+      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
+        if (!current || !subject) {
+          return current;
+        }
+
+        return {
+          ...current,
+          assignments: [
+            {
+              id: tempId,
+              title: variables.title,
+              description: variables.description.trim() || null,
+              dueDate: variables.dueDate || null,
+              status: 'TODO',
+              subjectId: subject.id,
+              subjectName: subject.name,
+              subjectColor: subject.color,
+              isPending: true,
+            },
+            ...current.assignments,
+          ],
+        };
+      });
+
+      return { previousData, tempId, variables };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
+      }
+
+      if (context?.variables) {
+        setNewTitle(context.variables.title);
+        setNewDescription(context.variables.description);
+        setNewDueDate(context.variables.dueDate);
+        setNewSubjectId(context.variables.subjectId);
+        setShowForm(true);
+      }
+    },
+    onSuccess: (createdAssignment, _variables, context) => {
+      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
+        if (!current || !context) {
+          return current;
+        }
+
+        return {
+          ...current,
+          assignments: current.assignments.map((assignment) =>
+            assignment.id === context.tempId
+              ? {
+                  ...assignment,
+                  id: createdAssignment.id,
+                  isPending: false,
+                }
+              : assignment
+          ),
+        };
+      });
+
+      void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
     },
   });
 
@@ -188,8 +215,31 @@ export default function AssignmentsPage() {
 
   const deleteAssignmentMutation = useMutation({
     mutationFn: (id: number) => deleteAssignment(id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
+
+      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
+
+      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          assignments: current.assignments.filter((assignment) => assignment.id !== id),
+        };
+      });
+
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
     },
   });
 
@@ -302,7 +352,15 @@ export default function AssignmentsPage() {
           </div>
           <div className="flex items-center justify-end border-t border-border/70 px-4 py-4">
             <Button
-              onClick={() => createAssignmentMutation.mutate()}
+              onClick={() =>
+                newSubjectId &&
+                createAssignmentMutation.mutate({
+                  title: newTitle.trim(),
+                  description: newDescription,
+                  dueDate: newDueDate,
+                  subjectId: newSubjectId,
+                })
+              }
               disabled={!newTitle.trim() || !newSubjectId || createAssignmentMutation.isPending}
             >
               Save Assignment
@@ -380,6 +438,7 @@ export default function AssignmentsPage() {
                       status: assignment.status === 'COMPLETED' ? 'TODO' : 'COMPLETED',
                     })
                   }
+                  disabled={assignment.isPending}
                   aria-label={`Mark ${assignment.title} as ${assignment.status === 'COMPLETED' ? 'todo' : 'completed'}`}
                 >
                   {getStatusIcon(assignment.status)}
@@ -452,6 +511,7 @@ export default function AssignmentsPage() {
                             status: event.target.value as AssignmentStatus,
                           })
                         }
+                        disabled={assignment.isPending}
                         className="h-9 min-w-36 px-3 text-xs"
                       >
                         {STATUS_OPTIONS.map((status) => (
@@ -460,7 +520,12 @@ export default function AssignmentsPage() {
                           </SelectItem>
                         ))}
                       </Select>
-                      <Button variant="ghost" size="icon" onClick={() => deleteAssignmentMutation.mutate(assignment.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
+                        disabled={assignment.isPending}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
