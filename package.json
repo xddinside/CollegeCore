@@ -10,7 +10,9 @@
     "db:studio": "drizzle-kit studio",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:dev": "npm run build && npm --prefix electron run dev",
+    "electron:build": "npm run build && npm --prefix electron run dist"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.0.11",

@@ -1,0 +1,17 @@
+appId: com.collegecore.desktop
+productName: CollegeCore
+asar: true
+files:
+  - dist/**
+directories:
+  output: release
+extraMetadata:
+  desktopUrl: ${env.COLLEGECORE_DESKTOP_URL}
+linux:
+  category: Education
+  target:
+    - AppImage
+    - deb
+win:
+  target:
+    - nsis

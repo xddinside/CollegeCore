@@ -12,6 +12,7 @@ import {
 } from '@/lib/actions';
 import { getDueStatus } from '@/lib/utils';
 import { DashboardGreeting } from '@/components/dashboard-greeting';
+import { DesktopNotificationPrompt } from '@/components/desktop-notification-prompt';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -87,6 +88,8 @@ export default async function DashboardPage() {
             : `Everything is up to date for ${semester.name}.`}
         </p>
       </div>
+
+      <DesktopNotificationPrompt />
 
       <div className="flex flex-col gap-3 md:hidden">
         <Link href="/dashboard/assignments">

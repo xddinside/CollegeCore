@@ -54,3 +54,9 @@ next-env.d.ts
 AGENTS.md
 CLAUDE.md
 PLAN.md
+
+# electron build outputs
+/electron/dist/
+/electron/node_modules/
+/electron/release/
+/electron/package-lock.json

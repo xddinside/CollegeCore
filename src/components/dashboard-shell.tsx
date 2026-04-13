@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Menu,
+  Settings,
   X,
 } from 'lucide-react';
 import {
@@ -24,6 +25,7 @@ import {
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { DesktopRuntime } from '@/components/desktop-runtime';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -31,6 +33,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/todos', label: 'Todos', icon: ListTodo },
   { href: '/dashboard/sprints', label: 'Sprints', icon: Calendar },
   { href: '/dashboard/subjects', label: 'Subjects', icon: BookOpen },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 type DashboardShellProps = {
@@ -128,29 +131,44 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                 const Icon = item.icon;
                 const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onMouseEnter={() => handleNavHover(item.href)}
-                  className={cn(
-                    'flex min-w-[64px] flex-col items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors',
-                    isActive ? 'text-foreground' : 'text-muted-foreground'
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="sr-only">{item.label}</span>
-                </Link>
-              );
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    onMouseEnter={() => handleNavHover(item.href)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
               })}
             </nav>
             <div className="border-t border-border/50 p-4">
-              <div className="flex items-center gap-3">
-                <UserButton />
-                <div>
-                  <p className="text-sm font-medium">{displayName}</p>
-                  <p className="text-xs text-muted-foreground">{semesterName}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <UserButton />
+                  <div>
+                    <p className="text-sm font-medium">{displayName}</p>
+                    <p className="text-xs text-muted-foreground">{semesterName}</p>
+                  </div>
                 </div>
+                <Link href="/dashboard/settings" onClick={() => setMobileMenuOpen(false)}>
+                  <Button
+                    variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="Open settings"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>
@@ -170,33 +188,45 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    onMouseEnter={() => handleNavHover(item.href)}
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-accent text-foreground'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
-                  </Link>
-                );
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                onMouseEnter={() => handleNavHover(item.href)}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
           })}
         </nav>
 
         <div className="border-t border-border/50 p-4">
-          <div className="flex items-center gap-3">
-            <UserButton />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{displayName}</p>
-              <p className="truncate text-xs text-muted-foreground">{semesterName}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <UserButton />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{semesterName}</p>
+              </div>
             </div>
+            <Link href="/dashboard/settings">
+              <Button
+                variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Open settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </aside>
@@ -207,29 +237,31 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background md:hidden">
         <div className="flex items-center justify-around py-2">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onMouseEnter={() => handleNavHover(item.href)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onMouseEnter={() => handleNavHover(item.href)}
+                className={cn(
+                  'flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
+
+      <DesktopRuntime />
     </div>
   );
 }
