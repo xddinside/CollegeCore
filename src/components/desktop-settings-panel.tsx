@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, MonitorCog, RefreshCw, Timer } from 'lucide-react';
+import { Bell, MonitorCog, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -70,138 +70,116 @@ export function DesktopSettingsPanel() {
   return (
     <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="space-y-2">
-        <h2 className="text-lg font-medium tracking-tight">Desktop features</h2>
+        <h2 className="text-lg font-medium tracking-tight">Desktop preferences</h2>
         <p className="text-sm text-muted-foreground">
-          Native controls live here when CollegeCore is opened through the Electron app.
+          These controls appear when CollegeCore is running in the desktop app.
         </p>
       </div>
 
       {!isDesktop ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-border bg-accent/40 p-6">
-          <div className="space-y-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary">
-              <MonitorCog className="h-5 w-5" />
+        <div className="mt-6 rounded-xl border border-dashed border-border bg-accent/35 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-background text-muted-foreground">
+              <MonitorCog className="h-4 w-4" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-medium">Desktop-only controls</h3>
+              <h3 className="text-sm font-medium text-foreground">Open the desktop app to change native behavior</h3>
               <p className="max-w-2xl text-sm text-muted-foreground">
-                Native notifications, system tray behavior, and the background reminder interval are available
-                only inside the desktop app. Your account data stays the same across both platforms.
+                Notifications, tray behavior, and reminder timing are available only in the Electron app.
               </p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-4">
-            <section className="rounded-2xl border border-border bg-background p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Bell className="h-4 w-4" />
-                    Native notifications
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Receive native assignment reminders and exam sprint alerts from the desktop app.
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.notificationsEnabled}
-                  onClick={() => void updateSettings({ notificationsEnabled: !settings.notificationsEnabled })}
-                  aria-label="Toggle native notifications"
-                />
+        <div className="mt-6 space-y-1 overflow-hidden rounded-xl border border-border bg-background">
+          <div className="flex items-start justify-between gap-4 px-5 py-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Bell className="h-4 w-4" />
+                Notifications
               </div>
-            </section>
-
-            <section className="rounded-2xl border border-border bg-background p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <MonitorCog className="h-4 w-4" />
-                    Minimize to tray
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Keep CollegeCore running in the background when the window is minimized or closed.
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.minimizeToTray}
-                  onClick={() => void updateSettings({ minimizeToTray: !settings.minimizeToTray })}
-                  aria-label="Toggle minimize to tray"
-                />
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-border bg-background p-5">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <RefreshCw className="h-4 w-4" />
-                    Reminder check interval
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Choose how often the desktop app looks for new due reminders while it is running.
-                  </p>
-                </div>
-
-                <div className="max-w-sm space-y-2">
-                  <Label htmlFor="notification-interval">Check every</Label>
-                  <Select
-                    id="notification-interval"
-                    value={String(settings.notificationCheckIntervalMinutes)}
-                    onChange={(event) => {
-                      const minutes = clampNotificationInterval(Number(event.target.value));
-                      void updateSettings({ notificationCheckIntervalMinutes: minutes });
-                    }}
-                  >
-                    {NOTIFICATION_INTERVAL_OPTIONS.map((minutes) => (
-                      <SelectItem key={minutes} value={String(minutes)}>
-                        {minutes} minutes
-                      </SelectItem>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-            </section>
+              <p className="text-sm text-muted-foreground">
+                Get desktop reminders for upcoming assignments and sprint work.
+              </p>
+            </div>
+            <Switch
+              checked={settings.notificationsEnabled}
+              onClick={() => void updateSettings({ notificationsEnabled: !settings.notificationsEnabled })}
+              aria-label="Toggle native notifications"
+            />
           </div>
 
-          <aside className="space-y-4">
-            <section className="rounded-2xl border border-border bg-[linear-gradient(180deg,#fafaf9,white)] p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Timer className="h-4 w-4" />
-                Status
+          <div className="border-t border-border px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <MonitorCog className="h-4 w-4" />
+                  Minimize to tray
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Keep CollegeCore running when you minimize the window or close it.
+                </p>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Notifications are{' '}
-                <span className="font-medium text-foreground">
-                  {settings.notificationsEnabled ? 'on' : 'off'}
-                </span>{' '}
-                and tray mode is{' '}
-                <span className="font-medium text-foreground">
-                  {settings.minimizeToTray ? 'enabled' : 'disabled'}
-                </span>.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                The app is checking for new reminders every{' '}
-                <span className="font-medium text-foreground">
-                  {settings.notificationCheckIntervalMinutes} minutes
-                </span>.
-              </p>
+              <Switch
+                checked={settings.minimizeToTray}
+                onClick={() => void updateSettings({ minimizeToTray: !settings.minimizeToTray })}
+                aria-label="Toggle minimize to tray"
+              />
+            </div>
+          </div>
 
-              <div className="mt-5 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                {status === 'saving' && 'Saving your desktop preferences...'}
-                {status === 'saved' && 'Desktop preferences saved.'}
-                {status === 'error' && 'Could not save desktop preferences. Try again.'}
-                {status === 'idle' && 'Changes apply immediately while the desktop app is running.'}
+          <div className="border-t border-border px-5 py-4">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <RefreshCw className="h-4 w-4" />
+                  Reminder check interval
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Choose how often the app checks for new reminders while it is open.
+                </p>
               </div>
 
-              <div className="mt-5">
-                <Button variant="outline" onClick={() => void window.collegeCoreDesktop?.dismissNotificationPrompt()}>
-                  Mark first-launch prompt as reviewed
-                </Button>
+              <div className="max-w-sm space-y-2">
+                <Label htmlFor="notification-interval">Check every</Label>
+                <Select
+                  id="notification-interval"
+                  value={String(settings.notificationCheckIntervalMinutes)}
+                  onChange={(event) => {
+                    const minutes = clampNotificationInterval(Number(event.target.value));
+                    void updateSettings({ notificationCheckIntervalMinutes: minutes });
+                  }}
+                >
+                  {NOTIFICATION_INTERVAL_OPTIONS.map((minutes) => (
+                    <SelectItem key={minutes} value={String(minutes)}>
+                      {minutes} minutes
+                    </SelectItem>
+                  ))}
+                </Select>
               </div>
-            </section>
-          </aside>
+            </div>
+          </div>
+
+          <div className="border-t border-border bg-accent/30 px-5 py-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {status === 'saving' && <p>Saving desktop preferences...</p>}
+                {status === 'saved' && <p>Desktop preferences saved.</p>}
+                {status === 'error' && <p>We could not save your changes. Try again.</p>}
+                {status === 'idle' && (
+                  <p>
+                    Notifications are {settings.notificationsEnabled ? 'on' : 'off'}, tray mode is{' '}
+                    {settings.minimizeToTray ? 'enabled' : 'off'}, and reminders are checked every{' '}
+                    {settings.notificationCheckIntervalMinutes} minutes.
+                  </p>
+                )}
+              </div>
+
+              <Button variant="outline" onClick={() => void window.collegeCoreDesktop?.dismissNotificationPrompt()}>
+                Dismiss first-launch prompt
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </section>
