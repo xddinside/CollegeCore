@@ -161,3 +161,8 @@ textarea::placeholder {
   text-align: center;
   color: var(--muted-foreground);
 }
+
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 1px;
+}

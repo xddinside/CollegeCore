@@ -186,7 +186,7 @@ export default async function DashboardPage() {
             )}
           </section>
 
-          <section>
+          <section className="content-visibility-auto">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-medium">Active Sprints</h2>
               <Link href="/dashboard/sprints">
@@ -232,7 +232,7 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        <div className="hidden space-y-10 lg:block">
+        <div className="hidden space-y-10 lg:block content-visibility-auto contain-intrinsic-size-auto-300">
           <section className="space-y-3">
             <Link href="/dashboard/assignments">
               <Button className="w-full justify-start" size="lg">

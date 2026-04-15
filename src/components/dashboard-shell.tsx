@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -25,7 +26,11 @@ import {
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { DesktopRuntime } from '@/components/desktop-runtime';
+
+const DesktopRuntime = dynamic(
+  () => import('@/components/desktop-runtime').then((mod) => mod.DesktopRuntime),
+  { ssr: false }
+);
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

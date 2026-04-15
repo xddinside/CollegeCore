@@ -3,7 +3,7 @@
 import { cache } from 'react';
 import { db } from '@/db';
 import { users, semesters, subjects, assignments, todos, examSprints, sprintSessions, attachments } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function createUserClerk(clerkId: string, email: string) {
@@ -131,21 +131,20 @@ export async function addAttachment(assignmentId: number, url: string, filename:
 }
 
 export async function getAssignmentStats(semesterId: number) {
-  const result = await db.select({
-    total: assignments.id,
-  })
+  const result = await db
+    .select({
+      total: sql<number>`count(*)`,
+      completed: sql<number>`sum(case when ${assignments.status} = 'COMPLETED' then 1 else 0 end)`,
+    })
     .from(assignments)
     .innerJoin(subjects, eq(assignments.subjectId, subjects.id))
-    .where(eq(subjects.semesterId, semesterId));
-  
-  const completed = await db.select({
-    total: assignments.id,
-  })
-    .from(assignments)
-    .innerJoin(subjects, eq(assignments.subjectId, subjects.id))
-    .where(and(eq(subjects.semesterId, semesterId), eq(assignments.status, 'COMPLETED')));
-  
-  return { total: result.length, completed: completed.length };
+    .where(eq(subjects.semesterId, semesterId))
+    .limit(1);
+
+  return {
+    total: result[0]?.total ?? 0,
+    completed: result[0]?.completed ?? 0,
+  };
 }
 
 export async function getTodos(semesterId: number) {
