@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import {
-  getAllAssignments,
-  getExamSprints,
-  getSemesterSubjects,
-  getTodos,
+  getAssignmentStats,
   getCachedCurrentSemester,
+  getSprintCount,
+  getSubjectCount,
+  getTodoStats,
 } from '@/lib/actions';
 import { DesktopSettingsPanel } from '@/components/desktop-settings-panel';
 import { Button } from '@/components/ui/button';
@@ -43,16 +43,16 @@ export default async function DashboardSettingsPage() {
     redirect('/onboarding');
   }
 
-  const [subjects, assignments, sprints, todos] = await Promise.all([
-    getSemesterSubjects(semester.id),
-    getAllAssignments(semester.id),
-    getExamSprints(semester.id),
-    getTodos(semester.id),
+  const [subjectCount, assignmentStats, sprintCount, todoStats] = await Promise.all([
+    getSubjectCount(semester.id),
+    getAssignmentStats(semester.id),
+    getSprintCount(semester.id),
+    getTodoStats(semester.id),
   ]);
 
-  const pendingAssignments = assignments.filter((assignment) => assignment.status !== 'COMPLETED').length;
-  const completedTodos = todos.filter((todo) => todo.isCompleted).length;
-  const pendingTodos = todos.length - completedTodos;
+  const pendingAssignments = assignmentStats.total - assignmentStats.completed;
+  const completedTodos = todoStats.completed;
+  const pendingTodos = todoStats.total - completedTodos;
 
   return (
     <div className="animate-fade-in mx-auto max-w-5xl space-y-8">
@@ -87,8 +87,8 @@ export default async function DashboardSettingsPage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Subjects"
-            value={String(subjects.length)}
-            hint={subjects.length === 1 ? '1 course this term' : `${subjects.length} courses this term`}
+            value={String(subjectCount)}
+            hint={subjectCount === 1 ? '1 course this term' : `${subjectCount} courses this term`}
           />
           <StatCard
             label="Assignments"
@@ -97,8 +97,8 @@ export default async function DashboardSettingsPage() {
           />
           <StatCard
             label="Exam sprints"
-            value={String(sprints.length)}
-            hint={sprints.length === 0 ? 'No sprint plans yet' : 'Prep plans saved'}
+            value={String(sprintCount)}
+            hint={sprintCount === 0 ? 'No sprint plans yet' : 'Prep plans saved'}
           />
           <StatCard
             label="Todos"

@@ -1,10 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserButton, useUser } from '@clerk/nextjs';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -27,11 +26,6 @@ import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { hasDesktopBridge } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-
-const DesktopRuntime = dynamic(
-  () => import('@/components/desktop-runtime').then((mod) => mod.DesktopRuntime),
-  { ssr: false }
-);
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -62,7 +56,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopRuntimeEnabled, setDesktopRuntimeEnabled] = useState(false);
+  const [DesktopRuntimeComponent, setDesktopRuntimeComponent] = useState<ComponentType | null>(null);
   const { user } = useUser();
   const displayName = user?.firstName || user?.fullName || 'Student';
 
@@ -71,9 +65,19 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
       return;
     }
 
-    return runWhenBrowserIdle(() => {
-      setDesktopRuntimeEnabled(true);
+    let active = true;
+    const cancelIdle = runWhenBrowserIdle(() => {
+      void import('@/components/desktop-runtime').then((mod) => {
+        if (active) {
+          setDesktopRuntimeComponent(() => mod.DesktopRuntime);
+        }
+      });
     });
+
+    return () => {
+      active = false;
+      cancelIdle();
+    };
   }, []);
 
   function handleNavIntent(href: string) {
@@ -268,7 +272,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
         </div>
       </nav>
 
-      {desktopRuntimeEnabled ? <DesktopRuntime /> : null}
+      {DesktopRuntimeComponent ? <DesktopRuntimeComponent /> : null}
     </div>
   );
 }

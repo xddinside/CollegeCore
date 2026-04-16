@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Calendar, CheckSquare, Clock, Plus } from 'lucide-react';
 import {
-  getAllAssignments,
+  getActiveSprintsPreview,
   getAssignmentStats,
-  getExamSprints,
-  getSemesterSubjects,
-  getTodos,
   getCachedCurrentSemester,
+  getRecentTodosPreview,
+  getSubjectCount,
+  getTodoStats,
+  getUpcomingAssignmentsPreview,
 } from '@/lib/actions';
 import { getDueStatus } from '@/lib/utils';
 import { DashboardGreeting } from '@/components/dashboard-greeting';
@@ -59,23 +60,16 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
-  const [subjects, stats, assignments, sprints, todos] = await Promise.all([
-    getSemesterSubjects(semester.id),
+  const [subjectCount, stats, pendingAssignments, sprints, todoStats, todos] = await Promise.all([
+    getSubjectCount(semester.id),
     getAssignmentStats(semester.id),
-    getAllAssignments(semester.id),
-    getExamSprints(semester.id),
-    getTodos(semester.id),
+    getUpcomingAssignmentsPreview(semester.id, 4),
+    getActiveSprintsPreview(semester.id, 2),
+    getTodoStats(semester.id),
+    getRecentTodosPreview(semester.id, 5),
   ]);
-
-  const pendingAssignments = assignments
-    .filter((assignment) => assignment.status !== 'COMPLETED')
-    .sort((a, b) => {
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-    })
-    .slice(0, 4);
-  const completedTodos = todos.filter((todo) => todo.isCompleted).length;
+  const completedTodos = todoStats.completed;
+  const totalTodos = todoStats.total;
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   return (
@@ -319,12 +313,12 @@ export default async function DashboardPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Subjects</span>
-                <span className="text-sm font-medium">{subjects.length}</span>
+                <span className="text-sm font-medium">{subjectCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Todos done</span>
                 <span className="text-sm font-medium">
-                  {completedTodos}/{todos.length}
+                  {completedTodos}/{totalTodos}
                 </span>
               </div>
             </div>

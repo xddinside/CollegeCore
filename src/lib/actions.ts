@@ -3,7 +3,7 @@
 import { cache } from 'react';
 import { db } from '@/db';
 import { users, semesters, subjects, assignments, todos, examSprints, sprintSessions, attachments } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, gte, ne, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 export async function createUserClerk(clerkId: string, email: string) {
@@ -145,6 +145,106 @@ export async function getAssignmentStats(semesterId: number) {
     total: result[0]?.total ?? 0,
     completed: result[0]?.completed ?? 0,
   };
+}
+
+export async function getSubjectCount(semesterId: number) {
+  const [result] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(subjects)
+    .where(eq(subjects.semesterId, semesterId))
+    .limit(1);
+
+  return result?.count ?? 0;
+}
+
+export async function getTodoStats(semesterId: number) {
+  const [result] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      completed: sql<number>`sum(case when ${todos.isCompleted} = true then 1 else 0 end)`,
+    })
+    .from(todos)
+    .where(eq(todos.semesterId, semesterId))
+    .limit(1);
+
+  return {
+    total: result?.total ?? 0,
+    completed: result?.completed ?? 0,
+  };
+}
+
+export async function getRecentTodosPreview(semesterId: number, limit = 5) {
+  return db
+    .select({
+      id: todos.id,
+      title: todos.title,
+      dueDate: todos.dueDate,
+      isCompleted: todos.isCompleted,
+      createdAt: todos.createdAt,
+      subjectId: todos.subjectId,
+      subjectName: subjects.name,
+      subjectColor: subjects.color,
+    })
+    .from(todos)
+    .leftJoin(subjects, eq(todos.subjectId, subjects.id))
+    .where(eq(todos.semesterId, semesterId))
+    .orderBy(
+      asc(todos.isCompleted),
+      sql`case when ${todos.dueDate} is null then 1 else 0 end`,
+      asc(todos.dueDate),
+      desc(todos.createdAt)
+    )
+    .limit(limit);
+}
+
+export async function getSprintCount(semesterId: number) {
+  const [result] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(examSprints)
+    .where(eq(examSprints.semesterId, semesterId))
+    .limit(1);
+
+  return result?.count ?? 0;
+}
+
+export async function getUpcomingAssignmentsPreview(semesterId: number, limit = 4) {
+  return db
+    .select({
+      id: assignments.id,
+      title: assignments.title,
+      description: assignments.description,
+      dueDate: assignments.dueDate,
+      status: assignments.status,
+      createdAt: assignments.createdAt,
+      subjectName: subjects.name,
+      subjectColor: subjects.color,
+      subjectId: subjects.id,
+    })
+    .from(assignments)
+    .innerJoin(subjects, eq(assignments.subjectId, subjects.id))
+    .where(and(eq(subjects.semesterId, semesterId), ne(assignments.status, 'COMPLETED')))
+    .orderBy(
+      sql`case when ${assignments.dueDate} is null then 1 else 0 end`,
+      asc(assignments.dueDate),
+      desc(assignments.createdAt)
+    )
+    .limit(limit);
+}
+
+export async function getActiveSprintsPreview(semesterId: number, limit = 2) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return db
+    .select()
+    .from(examSprints)
+    .where(and(eq(examSprints.semesterId, semesterId), gte(examSprints.endDate, today)))
+    .orderBy(asc(examSprints.startDate), asc(examSprints.endDate))
+    .limit(limit);
 }
 
 export async function getTodos(semesterId: number) {
