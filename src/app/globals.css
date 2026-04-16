@@ -140,6 +140,31 @@ textarea::placeholder {
   animation: fade-in 0.25s ease-out;
 }
 
+@keyframes landing-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-enter {
+  animation: landing-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .landing-enter,
+  .hover-lift {
+    animation: none;
+    transition: none;
+  }
+}
+
 .text-balance {
   text-wrap: balance;
 }

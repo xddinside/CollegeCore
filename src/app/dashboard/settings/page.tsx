@@ -4,10 +4,10 @@ import { redirect } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import {
   getAllAssignments,
-  getCurrentSemester,
   getExamSprints,
   getSemesterSubjects,
   getTodos,
+  getCachedCurrentSemester,
 } from '@/lib/actions';
 import { DesktopSettingsPanel } from '@/components/desktop-settings-panel';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ export default async function DashboardSettingsPage() {
     redirect('/sign-in');
   }
 
-  const semester = await getCurrentSemester(userId);
+  const semester = await getCachedCurrentSemester(userId);
 
   if (!semester) {
     redirect('/onboarding');

@@ -5,10 +5,10 @@ import { ArrowRight, Calendar, CheckSquare, Clock, Plus } from 'lucide-react';
 import {
   getAllAssignments,
   getAssignmentStats,
-  getCurrentSemester,
   getExamSprints,
   getSemesterSubjects,
   getTodos,
+  getCachedCurrentSemester,
 } from '@/lib/actions';
 import { getDueStatus } from '@/lib/utils';
 import { DashboardGreeting } from '@/components/dashboard-greeting';
@@ -53,7 +53,7 @@ export default async function DashboardPage() {
     redirect('/sign-in');
   }
 
-  const semester = await getCurrentSemester(userId);
+  const semester = await getCachedCurrentSemester(userId);
 
   if (!semester) {
     redirect('/onboarding');

@@ -6,6 +6,16 @@ import { getAssignmentsPageData, getSprintsPageData } from '@/lib/dashboard-quer
 import { hasDesktopBridge, type DesktopReminderCandidate } from '@/lib/desktop';
 import { getDueStatus } from '@/lib/utils';
 
+function runWhenBrowserIdle(callback: () => void) {
+  if (typeof window.requestIdleCallback === 'function') {
+    const idleId = window.requestIdleCallback(callback, { timeout: 1500 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timeoutId = window.setTimeout(callback, 300);
+  return () => window.clearTimeout(timeoutId);
+}
+
 function getCalendarDiffDays(date: Date | string) {
   const target = new Date(date);
   target.setHours(0, 0, 0, 0);
@@ -107,7 +117,7 @@ export function DesktopRuntime() {
     let active = true;
 
     const submitReminders = async () => {
-      if (!active) {
+      if (!active || document.visibilityState !== 'visible') {
         return;
       }
 
@@ -123,10 +133,13 @@ export function DesktopRuntime() {
       void submitReminders();
     });
 
-    void submitReminders();
+    const cancelInitialRun = runWhenBrowserIdle(() => {
+      void submitReminders();
+    });
 
     return () => {
       active = false;
+      cancelInitialRun();
       unsubscribeReminderPoll();
       unsubscribeSettingsChanged();
     };

@@ -24,6 +24,7 @@ import {
   getTodosPageData,
 } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { hasDesktopBridge } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -46,42 +47,36 @@ type DashboardShellProps = {
   semesterName: string;
 };
 
+function runWhenBrowserIdle(callback: () => void) {
+  if (typeof window.requestIdleCallback === 'function') {
+    const idleId = window.requestIdleCallback(callback, { timeout: 1200 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+
+  const timeoutId = window.setTimeout(callback, 250);
+  return () => window.clearTimeout(timeoutId);
+}
+
 export function DashboardShell({ children, semesterName }: DashboardShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopRuntimeEnabled, setDesktopRuntimeEnabled] = useState(false);
   const { user } = useUser();
   const displayName = user?.firstName || user?.fullName || 'Student';
 
   useEffect(() => {
-    if (!user) {
+    if (!hasDesktopBridge()) {
       return;
     }
 
-    for (const item of NAV_ITEMS) {
-      router.prefetch(item.href);
-    }
+    return runWhenBrowserIdle(() => {
+      setDesktopRuntimeEnabled(true);
+    });
+  }, []);
 
-    void queryClient.prefetchQuery({
-      queryKey: dashboardQueryKeys.assignments(user.id),
-      queryFn: () => getAssignmentsPageData(user.id),
-    });
-    void queryClient.prefetchQuery({
-      queryKey: dashboardQueryKeys.todos(user.id),
-      queryFn: () => getTodosPageData(user.id),
-    });
-    void queryClient.prefetchQuery({
-      queryKey: dashboardQueryKeys.subjects(user.id),
-      queryFn: () => getSubjectsPageData(user.id),
-    });
-    void queryClient.prefetchQuery({
-      queryKey: dashboardQueryKeys.sprints(user.id),
-      queryFn: () => getSprintsPageData(user.id),
-    });
-  }, [queryClient, router, user]);
-
-  function handleNavHover(href: string) {
+  function handleNavIntent(href: string) {
     if (!user) {
       return;
     }
@@ -92,21 +87,25 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
       void queryClient.prefetchQuery({
         queryKey: dashboardQueryKeys.assignments(user.id),
         queryFn: () => getAssignmentsPageData(user.id),
+        staleTime: 30_000,
       });
     } else if (href === '/dashboard/todos') {
       void queryClient.prefetchQuery({
         queryKey: dashboardQueryKeys.todos(user.id),
         queryFn: () => getTodosPageData(user.id),
+        staleTime: 30_000,
       });
     } else if (href === '/dashboard/subjects') {
       void queryClient.prefetchQuery({
         queryKey: dashboardQueryKeys.subjects(user.id),
         queryFn: () => getSubjectsPageData(user.id),
+        staleTime: 30_000,
       });
     } else if (href === '/dashboard/sprints') {
       void queryClient.prefetchQuery({
         queryKey: dashboardQueryKeys.sprints(user.id),
         queryFn: () => getSprintsPageData(user.id),
+        staleTime: 30_000,
       });
     }
   }
@@ -141,7 +140,8 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    onMouseEnter={() => handleNavHover(item.href)}
+                    onFocus={() => handleNavIntent(item.href)}
+                    onPointerEnter={() => handleNavIntent(item.href)}
                     className={cn(
                       'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
                       isActive
@@ -198,7 +198,8 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                onMouseEnter={() => handleNavHover(item.href)}
+                onFocus={() => handleNavIntent(item.href)}
+                onPointerEnter={() => handleNavIntent(item.href)}
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
                   isActive
@@ -250,7 +251,8 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
               <Link
                 key={item.href}
                 href={item.href}
-                onMouseEnter={() => handleNavHover(item.href)}
+                onFocus={() => handleNavIntent(item.href)}
+                onPointerEnter={() => handleNavIntent(item.href)}
                 className={cn(
                   'flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
@@ -266,7 +268,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
         </div>
       </nav>
 
-      <DesktopRuntime />
+      {desktopRuntimeEnabled ? <DesktopRuntime /> : null}
     </div>
   );
 }
