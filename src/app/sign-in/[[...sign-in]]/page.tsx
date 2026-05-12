@@ -10,7 +10,6 @@ export default function SignInPage() {
         </div>
         <SignIn
           signUpUrl="/sign-up"
-          forceRedirectUrl="/dashboard"
           fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
