@@ -140,6 +140,20 @@ textarea::placeholder {
   animation: fade-in 0.25s ease-out;
 }
 
+@keyframes skeleton {
+  from {
+    background-position-x: 200%;
+  }
+
+  to {
+    background-position-x: -200%;
+  }
+}
+
+.animate-skeleton {
+  animation: skeleton 1.6s linear infinite;
+}
+
 @keyframes landing-enter {
   from {
     opacity: 0;
@@ -158,6 +172,7 @@ textarea::placeholder {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
+  .animate-skeleton,
   .landing-enter,
   .hover-lift {
     animation: none;
@@ -175,16 +190,6 @@ textarea::placeholder {
 
 .hover-lift:hover {
   transform: translateY(-1px);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
-  text-align: center;
-  color: var(--muted-foreground);
 }
 
 .content-visibility-auto {

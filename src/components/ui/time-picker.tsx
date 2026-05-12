@@ -1,10 +1,10 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import { ChevronDown, Clock3 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 
 interface TimePickerProps {
   id?: string;
@@ -89,34 +89,33 @@ export function TimePicker({
   }
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
           id={id}
-          type="button"
           disabled={disabled}
+            variant="outline"
           className={cn(
-            'flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3.5 py-2.5 text-left text-sm',
-            'transition-[border-color,box-shadow] hover:border-border-hover',
-            'data-[state=open]:border-border-hover data-[state=open]:shadow-md',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            'disabled:cursor-not-allowed disabled:opacity-50',
+              'h-11 w-full justify-between px-3.5 py-2.5 font-normal text-left text-sm sm:h-10',
             className
           )}
+          />
+        }
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <Clock3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            {value ? <span className="truncate tabular-nums">{formatTimeLabel(value)}</span> : <span className="sr-only">{placeholder}</span>}
+            <span className={cn('truncate tabular-nums', !value && 'text-muted-foreground')}>
+              {value ? formatTimeLabel(value) : placeholder}
+            </span>
           </span>
           <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
-        </button>
-      </Popover.Trigger>
+      </PopoverTrigger>
 
-      <Popover.Portal>
-        <Popover.Content
+      <PopoverPopup
           align="start"
           sideOffset={8}
-          className="z-50 w-[17rem] rounded-2xl border border-border bg-background p-3 shadow-lg outline-none"
+        className="w-[17rem] rounded-2xl p-3"
         >
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
@@ -135,6 +134,7 @@ export function TimePicker({
                       key={period}
                       type="button"
                       onClick={() => updateTime({ period })}
+                      aria-pressed={selected}
                       className={cn(
                         'rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200',
                         selected
@@ -164,6 +164,7 @@ export function TimePicker({
                         }}
                         type="button"
                         onClick={() => updateTime({ hour12: hour })}
+                        aria-pressed={selected}
                         className={cn(
                           'w-full rounded-lg px-3 py-2 text-left text-sm tabular-nums transition-all duration-200',
                           selected
@@ -192,6 +193,7 @@ export function TimePicker({
                         }}
                         type="button"
                         onClick={() => updateTime({ minute })}
+                        aria-pressed={selected}
                         className={cn(
                           'w-full rounded-lg px-3 py-2 text-left text-sm tabular-nums transition-all duration-200',
                           selected
@@ -223,8 +225,7 @@ export function TimePicker({
               </div>
             ) : null}
           </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverPopup>
+    </Popover>
   );
 }

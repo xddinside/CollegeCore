@@ -2,13 +2,13 @@ import { SignUp } from '@clerk/nextjs';
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+        <div className="mb-8 text-center">
           <h1 className="text-xl font-semibold tracking-tight">CollegeCore</h1>
-          <p className="text-sm text-muted-foreground mt-1">Create your account</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create your account</p>
         </div>
-        <SignUp 
+        <SignUp
           signInUrl="/sign-in"
           forceRedirectUrl="/onboarding"
           fallbackRedirectUrl="/onboarding"

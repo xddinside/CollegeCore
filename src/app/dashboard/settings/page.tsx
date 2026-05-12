@@ -76,12 +76,10 @@ export default async function DashboardSettingsPage() {
             </div>
           </div>
 
-          <Link href="/dashboard/subjects">
-            <Button variant="outline">
-              Manage subjects
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <Button render={<Link href="/dashboard/subjects" />} variant="outline">
+            Manage subjects
+            <ArrowRight className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

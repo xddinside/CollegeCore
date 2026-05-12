@@ -125,6 +125,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
           variant="ghost"
           size="icon"
           className="h-9 w-9"
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           onClick={() => setMobileMenuOpen((open) => !open)}
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -143,6 +144,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                   <Link
                     key={item.href}
                     href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => setMobileMenuOpen(false)}
                     onFocus={() => handleNavIntent(item.href)}
                     onPointerEnter={() => handleNavIntent(item.href)}
@@ -168,16 +170,15 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                     <p className="text-xs text-muted-foreground">{semesterName}</p>
                   </div>
                 </div>
-                <Link href="/dashboard/settings" onClick={() => setMobileMenuOpen(false)}>
-                  <Button
-                    variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="h-9 w-9"
-                    aria-label="Open settings"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </Link>
+                <Button
+                  render={<Link href="/dashboard/settings" onClick={() => setMobileMenuOpen(false)} />}
+                  variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-9 w-9"
+                  aria-label="Open settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -201,6 +202,7 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 onClick={() => setMobileMenuOpen(false)}
                 onFocus={() => handleNavIntent(item.href)}
                 onPointerEnter={() => handleNavIntent(item.href)}
@@ -227,26 +229,25 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
                 <p className="truncate text-xs text-muted-foreground">{semesterName}</p>
               </div>
             </div>
-            <Link href="/dashboard/settings">
-              <Button
-                variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
-                size="icon"
-                className="h-9 w-9"
-                aria-label="Open settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button
+              render={<Link href="/dashboard/settings" />}
+              variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-9 w-9"
+              aria-label="Open settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </aside>
 
-      <main className="pb-20 md:ml-60 md:pb-0">
+      <main className="pb-24 md:ml-60 md:pb-0">
         <div className="p-4 md:p-10">{children}</div>
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background md:hidden">
-        <div className="flex items-center justify-around py-2">
+        <div className="flex items-center gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -255,17 +256,18 @@ export function DashboardShell({ children, semesterName }: DashboardShellProps) 
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 onFocus={() => handleNavIntent(item.href)}
                 onPointerEnter={() => handleNavIntent(item.href)}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  'flex min-w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
                   isActive
                     ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                <span className="max-w-full truncate">{item.label}</span>
               </Link>
             );
           })}

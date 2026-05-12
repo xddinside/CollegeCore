@@ -14,9 +14,12 @@ import {
   type SubjectsPageData,
 } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 type SaveSubjectInput = {
   id: number | null;
@@ -174,11 +177,21 @@ export default function SubjectsPage() {
   );
 
   if (!isLoaded || subjectsQuery.isLoading) {
-    return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4" />
+        Loading subjects...
+      </div>
+    );
   }
 
   if (subjectsQuery.isError) {
-    return <div className="py-8 text-sm text-destructive">Unable to load subjects.</div>;
+    return (
+      <Alert variant="error">
+        <AlertTitle>Unable to load subjects</AlertTitle>
+        <AlertDescription>Refresh the page and try again.</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -207,6 +220,7 @@ export default function SubjectsPage() {
             <Label htmlFor="subject-name">Subject name</Label>
             <Input
               id="subject-name"
+              type="text"
               placeholder="Subject name"
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
@@ -229,6 +243,7 @@ export default function SubjectsPage() {
                   }`}
                   style={{ backgroundColor: color }}
                   aria-label={`Choose ${color}`}
+                  aria-pressed={newColor === color}
                 />
               ))}
             </div>
@@ -242,7 +257,8 @@ export default function SubjectsPage() {
                   color: newColor,
                 })
               }
-              disabled={!newName.trim() || saveSubjectMutation.isPending}
+              disabled={!newName.trim()}
+              loading={saveSubjectMutation.isPending}
             >
               {editId ? 'Update Subject' : 'Save Subject'}
             </Button>
@@ -253,21 +269,36 @@ export default function SubjectsPage() {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          type="search"
           placeholder="Search subjects..."
-          className="pl-9"
+          inputClassName="pl-9"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
 
       {filteredSubjects.length === 0 ? (
-        <div className="empty-state">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-            <BookOpen className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-medium text-foreground">No subjects</h3>
-          <p className="mt-1">Add your first subject to get started.</p>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <BookOpen className="h-6 w-6 text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>No subjects</EmptyTitle>
+            <EmptyDescription>Add your first subject to get started.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              aria-label="Create first subject"
+              onClick={() => {
+                setSearch('');
+                setShowForm(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Subject
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filteredSubjects.map((subject) => {
@@ -298,7 +329,7 @@ export default function SubjectsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => {
+                    <Button variant="ghost" size="icon" aria-label={`Edit ${subject.name}`} onClick={() => {
                       setNewName(subject.name);
                       setNewColor(subject.color);
                       setEditId(subject.id);
@@ -306,7 +337,7 @@ export default function SubjectsPage() {
                     }} disabled={subject.isPending}>
                       <PencilLine className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => deleteSubjectMutation.mutate(subject.id)} disabled={subject.isPending}>
+                    <Button variant="ghost" size="icon" aria-label={`Delete ${subject.name}`} onClick={() => deleteSubjectMutation.mutate(subject.id)} disabled={subject.isPending}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

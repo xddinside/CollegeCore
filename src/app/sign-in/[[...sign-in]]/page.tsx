@@ -2,14 +2,16 @@ import { SignIn } from '@clerk/nextjs';
 
 export default function SignInPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+        <div className="mb-8 text-center">
           <h1 className="text-xl font-semibold tracking-tight">CollegeCore</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
+          <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
         </div>
-        <SignIn 
+        <SignIn
           signUpUrl="/sign-up"
+          forceRedirectUrl="/dashboard"
+          fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
               rootBox: 'w-full',

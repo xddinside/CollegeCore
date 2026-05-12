@@ -16,6 +16,7 @@ import { DashboardGreeting } from '@/components/dashboard-greeting';
 import { DesktopNotificationPrompt } from '@/components/desktop-notification-prompt';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 
 function formatDueDate(dueDate: Date | string | null, precomputedStatus?: ReturnType<typeof getDueStatus>) {
   if (!dueDate) {
@@ -86,18 +87,14 @@ export default async function DashboardPage() {
       <DesktopNotificationPrompt />
 
       <div className="flex flex-col gap-3 md:hidden">
-        <Link href="/dashboard/assignments">
-          <Button className="w-full justify-center">
-            <Plus className="mr-2 h-4 w-4" />
-            New Assignment
-          </Button>
-        </Link>
-        <Link href="/dashboard/sprints">
-          <Button variant="outline" className="w-full justify-center">
-            <Calendar className="mr-2 h-4 w-4" />
-            View Sprints
-          </Button>
-        </Link>
+        <Button render={<Link href="/dashboard/assignments" />} className="w-full justify-center">
+          <Plus className="mr-2 h-4 w-4" />
+          New Assignment
+        </Button>
+        <Button render={<Link href="/dashboard/sprints" />} variant="outline" className="w-full justify-center">
+          <Calendar className="mr-2 h-4 w-4" />
+          View Sprints
+        </Button>
       </div>
 
       <div className="grid gap-10 lg:grid-cols-3">
@@ -105,19 +102,27 @@ export default async function DashboardPage() {
           <section>
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-medium">Upcoming</h2>
-              <Link href="/dashboard/assignments">
-                <Button variant="ghost" size="sm">
-                  View all
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              <Button render={<Link href="/dashboard/assignments" />} variant="ghost" size="sm">
+                View all
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
 
             {pendingAssignments.length === 0 ? (
-              <div className="empty-state rounded-xl border border-border bg-accent/40 px-6 py-12">
-                <h3 className="text-lg font-medium text-foreground">No upcoming assignments</h3>
-                <p className="mt-1">Create your first assignment to start planning the semester.</p>
-              </div>
+              <Empty className="rounded-xl border border-border bg-accent/40 py-12 md:py-12">
+                <EmptyHeader>
+                  <EmptyTitle>No upcoming assignments</EmptyTitle>
+                  <EmptyDescription>
+                    Create your first assignment to start planning the semester.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button render={<Link href="/dashboard/assignments" />} variant="outline">
+                    <Plus className="h-4 w-4" />
+                    New Assignment
+                  </Button>
+                </EmptyContent>
+              </Empty>
             ) : (
               <div className="space-y-1">
                 {pendingAssignments.map((assignment) => {
@@ -183,12 +188,10 @@ export default async function DashboardPage() {
           <section className="content-visibility-auto">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-medium">Active Sprints</h2>
-              <Link href="/dashboard/sprints">
-                <Button variant="ghost" size="sm">
-                  View all
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              <Button render={<Link href="/dashboard/sprints" />} variant="ghost" size="sm">
+                View all
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
 
             {sprints.length === 0 ? (
@@ -228,28 +231,22 @@ export default async function DashboardPage() {
 
         <div className="hidden space-y-10 lg:block content-visibility-auto contain-intrinsic-size-auto-300">
           <section className="space-y-3">
-            <Link href="/dashboard/assignments">
-              <Button className="w-full justify-start" size="lg">
-                <Plus className="mr-2 h-4 w-4" />
-                New Assignment
-              </Button>
-            </Link>
-            <Link href="/dashboard/subjects">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <Calendar className="mr-2 h-4 w-4" />
-                Manage Subjects
-              </Button>
-            </Link>
+            <Button render={<Link href="/dashboard/assignments" />} className="w-full justify-start" size="lg">
+              <Plus className="mr-2 h-4 w-4" />
+              New Assignment
+            </Button>
+            <Button render={<Link href="/dashboard/subjects" />} variant="outline" className="w-full justify-start" size="lg">
+              <Calendar className="mr-2 h-4 w-4" />
+              Manage Subjects
+            </Button>
           </section>
 
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-medium">Todos</h2>
-              <Link href="/dashboard/todos">
-                <Button variant="ghost" size="sm">
-                  View all
-                </Button>
-              </Link>
+              <Button render={<Link href="/dashboard/todos" />} variant="ghost" size="sm">
+                View all
+              </Button>
             </div>
 
             <div className="space-y-1">

@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { createSemester, createSubject } from '@/lib/actions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectItem } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 
 const COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
@@ -90,7 +94,10 @@ export default function OnboardingPage() {
   if (!isLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          Loading...
+        </p>
       </div>
     );
   }
@@ -128,8 +135,10 @@ export default function OnboardingPage() {
           {step === 1 && (
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Your name</label>
+                <Label htmlFor="display-name">Your name</Label>
                 <Input
+                  id="display-name"
+                  type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="e.g. Alex"
@@ -149,16 +158,16 @@ export default function OnboardingPage() {
           {step === 2 && (
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Semester</label>
-                <select
+                <Label htmlFor="semester">Semester</Label>
+                <Select
+                  id="semester"
                   value={semester}
                   onChange={(e) => setSemester(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
                   {SEMESTERS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div className="flex justify-between">
@@ -179,6 +188,7 @@ export default function OnboardingPage() {
               <div className="space-y-4">
                 <div className="flex gap-2">
                   <Input
+                    type="text"
                     value={newSubject}
                     onChange={(e) => setNewSubject(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addSubject()}
@@ -196,6 +206,8 @@ export default function OnboardingPage() {
                       key={color}
                       type="button"
                       onClick={() => setSelectedColor(color)}
+                      aria-label={`Choose ${color}`}
+                      aria-pressed={selectedColor === color}
                       className={`h-6 w-6 rounded-full transition-transform ${
                         selectedColor === color ? 'ring-2 ring-primary ring-offset-2' : ''
                       }`}
@@ -216,6 +228,7 @@ export default function OnboardingPage() {
                         <button
                           type="button"
                           onClick={() => removeSubject(index)}
+                          aria-label={`Remove ${subject.name}`}
                           className="ml-1 text-muted-foreground hover:text-foreground"
                         >
                           <X className="h-3 w-3" />
@@ -226,7 +239,9 @@ export default function OnboardingPage() {
                 )}
 
                 {error && (
-                  <p className="text-sm text-destructive">{error}</p>
+                  <Alert variant="error">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
               </div>
 
@@ -235,8 +250,8 @@ export default function OnboardingPage() {
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back
                 </Button>
-                <Button onClick={handleSubmit} disabled={!canProceed() || loading}>
-                  {loading ? 'Setting up...' : 'Get started'}
+                <Button onClick={handleSubmit} disabled={!canProceed()} loading={loading}>
+                  Get started
                 </Button>
               </div>
             </div>

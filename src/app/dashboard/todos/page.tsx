@@ -11,11 +11,15 @@ import {
 } from '@/lib/actions';
 import { getTodosPageData, type TodosPageData } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectItem } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 
 type CreateTodoInput = {
   title: string;
@@ -189,11 +193,21 @@ export default function TodosPage() {
   const completedCount = todos.filter((todo) => todo.isCompleted).length;
 
   if (!isLoaded || todosQuery.isLoading) {
-    return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4" />
+        Loading todos...
+      </div>
+    );
   }
 
   if (todosQuery.isError) {
-    return <div className="py-8 text-sm text-destructive">Unable to load todos.</div>;
+    return (
+      <Alert variant="error">
+        <AlertTitle>Unable to load todos</AlertTitle>
+        <AlertDescription>Refresh the page and try again.</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -213,6 +227,7 @@ export default function TodosPage() {
             </Label>
             <Input
               id="todo-title"
+              type="text"
               placeholder="Add a new todo..."
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
@@ -265,7 +280,8 @@ export default function TodosPage() {
                   subjectId: newSubjectId,
                 })
               }
-              disabled={!newTitle.trim() || createTodoMutation.isPending}
+              disabled={!newTitle.trim()}
+              loading={createTodoMutation.isPending}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Todo
@@ -275,13 +291,25 @@ export default function TodosPage() {
       </div>
 
       {todos.length === 0 ? (
-        <div className="empty-state">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-            <ListTodo className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-medium text-foreground">No todos</h3>
-          <p className="mt-1">Add your first todo to get started.</p>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ListTodo className="h-6 w-6 text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>No todos</EmptyTitle>
+            <EmptyDescription>Add your first todo to get started.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              variant="outline"
+              aria-label="Focus new todo field"
+              onClick={() => document.getElementById('todo-title')?.focus()}
+            >
+              <Plus className="h-4 w-4" />
+              Add Todo
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="space-y-1">
           {todos.map((todo) => (
@@ -291,34 +319,18 @@ export default function TodosPage() {
                 todo.isCompleted ? 'opacity-50' : ''
               }`}
             >
-              <button
-                type="button"
-                onClick={() =>
+              <Checkbox
+                checked={todo.isCompleted}
+                onCheckedChange={(checked) =>
                   toggleTodoMutation.mutate({
                     id: todo.id,
-                    isCompleted: !todo.isCompleted,
+                    isCompleted: checked === true,
                   })
                 }
                 disabled={todo.isPending}
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                  todo.isCompleted
-                    ? 'border-primary bg-primary'
-                    : 'border-muted-foreground/30 group-hover:border-primary'
-                }`}
+                className="mt-0.5"
                 aria-label={`Toggle ${todo.title}`}
-              >
-                {todo.isCompleted && (
-                  <svg
-                    className="h-2.5 w-2.5 text-primary-foreground"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={3}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
+              />
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -349,15 +361,17 @@ export default function TodosPage() {
                 )}
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => deleteTodoMutation.mutate(todo.id)}
                 disabled={todo.isPending}
-                className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                className="text-muted-foreground opacity-100 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                 aria-label={`Delete ${todo.title}`}
               >
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>

@@ -16,11 +16,13 @@ import {
 } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectItem } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { TimePicker } from '@/components/ui/time-picker';
 
@@ -76,7 +78,7 @@ function getSprintProgress(startDate: Date | string, endDate: Date | string) {
 function getStatusBadge(status: string) {
   if (status === 'active') return <Badge variant="success">Active</Badge>;
   if (status === 'upcoming') return <Badge variant="secondary">Upcoming</Badge>;
-  return <Badge variant="ghost">Completed</Badge>;
+  return <Badge variant="outline">Completed</Badge>;
 }
 
 function formatTime(value: string) {
@@ -369,11 +371,21 @@ export default function SprintsPage() {
     .slice(0, 6);
 
   if (!isLoaded || sprintsQuery.isLoading) {
-    return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4" />
+        Loading sprints...
+      </div>
+    );
   }
 
   if (sprintsQuery.isError) {
-    return <div className="py-8 text-sm text-destructive">Unable to load sprints.</div>;
+    return (
+      <Alert variant="error">
+        <AlertTitle>Unable to load sprints</AlertTitle>
+        <AlertDescription>Refresh the page and try again.</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -398,6 +410,7 @@ export default function SprintsPage() {
               </Label>
               <Input
                 id="sprint-name"
+                type="text"
                 placeholder="Sprint name"
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
@@ -438,7 +451,8 @@ export default function SprintsPage() {
                   endDate: newEndDate,
                 })
               }
-              disabled={!newName.trim() || !newStartDate || !newEndDate || createSprintMutation.isPending}
+              disabled={!newName.trim() || !newStartDate || !newEndDate}
+              loading={createSprintMutation.isPending}
             >
               Save Sprint
             </Button>
@@ -482,7 +496,7 @@ export default function SprintsPage() {
                             Add Session
                             <ChevronRight className="ml-1 h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteSprintMutation.mutate(sprint.id)} disabled={sprint.isPending}>
+                          <Button variant="ghost" size="icon" aria-label={`Delete ${sprint.name}`} onClick={() => deleteSprintMutation.mutate(sprint.id)} disabled={sprint.isPending}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -577,7 +591,8 @@ export default function SprintsPage() {
                                   notes: newNotes,
                                 })
                               }
-                              disabled={!newDate || !newStartTime || !newEndTime || !newSubjectId || createSessionMutation.isPending}
+                              disabled={!newDate || !newStartTime || !newEndTime || !newSubjectId}
+                              loading={createSessionMutation.isPending}
                             >
                               Save Session
                             </Button>
@@ -606,7 +621,7 @@ export default function SprintsPage() {
                                       · {formatTime(session.startTime)} - {formatTime(session.endTime)}
                                     </p>
                                   </div>
-                                  <Button variant="ghost" size="icon" onClick={() => deleteSessionMutation.mutate(session.id)} disabled={session.isPending}>
+                                  <Button variant="ghost" size="icon" aria-label={`Delete ${session.subjectName} session`} onClick={() => deleteSessionMutation.mutate(session.id)} disabled={session.isPending}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>

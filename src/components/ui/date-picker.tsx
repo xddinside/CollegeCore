@@ -1,12 +1,12 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import { format, parseISO } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { DayPicker, type Matcher } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 
 interface DatePickerProps {
   id?: string;
@@ -52,20 +52,19 @@ export function DatePicker({
   }, [maxDate, minDate]);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
           id={id}
-          type="button"
           disabled={disabled}
+            variant="outline"
           className={cn(
-            'flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3.5 py-2.5 text-left text-sm',
-            'transition-[border-color,box-shadow] hover:border-border-hover',
-            'data-[state=open]:border-border-hover data-[state=open]:shadow-md',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            'disabled:cursor-not-allowed disabled:opacity-50',
+              'h-11 w-full justify-between px-3.5 py-2.5 font-normal text-left text-sm sm:h-10',
             className
           )}
+          />
+        }
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -74,14 +73,12 @@ export function DatePicker({
             </span>
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
-      </Popover.Trigger>
+      </PopoverTrigger>
 
-      <Popover.Portal>
-        <Popover.Content
+      <PopoverPopup
           align="start"
           sideOffset={8}
-          className="z-50 w-[18.5rem] rounded-2xl border border-border bg-background p-3 shadow-lg outline-none"
+        className="w-[18.5rem] rounded-2xl p-3"
         >
           <DayPicker
             mode="single"
@@ -134,8 +131,7 @@ export function DatePicker({
               </Button>
             </div>
           ) : null}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverPopup>
+    </Popover>
   );
 }

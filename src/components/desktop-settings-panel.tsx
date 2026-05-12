@@ -104,7 +104,7 @@ export function DesktopSettingsPanel() {
             </div>
             <Switch
               checked={settings.notificationsEnabled}
-              onClick={() => void updateSettings({ notificationsEnabled: !settings.notificationsEnabled })}
+              onCheckedChange={(checked) => void updateSettings({ notificationsEnabled: checked })}
               aria-label="Toggle native notifications"
             />
           </div>
@@ -122,7 +122,7 @@ export function DesktopSettingsPanel() {
               </div>
               <Switch
                 checked={settings.minimizeToTray}
-                onClick={() => void updateSettings({ minimizeToTray: !settings.minimizeToTray })}
+                onCheckedChange={(checked) => void updateSettings({ minimizeToTray: checked })}
                 aria-label="Toggle minimize to tray"
               />
             </div>

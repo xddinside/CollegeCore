@@ -23,12 +23,15 @@ import {
 } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
 import { getDueStatus } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectItem } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
@@ -272,11 +275,21 @@ export default function AssignmentsPage() {
   const completedCount = filteredAssignments.filter((assignment) => assignment.status === 'COMPLETED').length;
 
   if (!isLoaded || assignmentsQuery.isLoading) {
-    return <div className="py-8 text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4" />
+        Loading assignments...
+      </div>
+    );
   }
 
   if (assignmentsQuery.isError) {
-    return <div className="py-8 text-sm text-destructive">Unable to load assignments.</div>;
+    return (
+      <Alert variant="error">
+        <AlertTitle>Unable to load assignments</AlertTitle>
+        <AlertDescription>Refresh the page and try again.</AlertDescription>
+      </Alert>
+    );
   }
 
   return (
@@ -303,6 +316,7 @@ export default function AssignmentsPage() {
               </Label>
               <Input
                 id="assignment-title"
+                type="text"
                 placeholder="Assignment title"
                 value={newTitle}
                 onChange={(event) => setNewTitle(event.target.value)}
@@ -361,7 +375,8 @@ export default function AssignmentsPage() {
                   subjectId: newSubjectId,
                 })
               }
-              disabled={!newTitle.trim() || !newSubjectId || createAssignmentMutation.isPending}
+              disabled={!newTitle.trim() || !newSubjectId}
+              loading={createAssignmentMutation.isPending}
             >
               Save Assignment
             </Button>
@@ -373,8 +388,9 @@ export default function AssignmentsPage() {
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            type="search"
             placeholder="Search assignments..."
-            className="pl-9"
+            inputClassName="pl-9"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -410,13 +426,29 @@ export default function AssignmentsPage() {
       </div>
 
       {filteredAssignments.length === 0 ? (
-        <div className="empty-state">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-            <FileText className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-medium text-foreground">No assignments</h3>
-          <p className="mt-1">Create your first assignment to get started.</p>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FileText className="h-6 w-6 text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>No assignments</EmptyTitle>
+            <EmptyDescription>Create your first assignment to get started.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              aria-label="Create first assignment"
+              onClick={() => {
+                setSearch('');
+                setSubjectFilter('all');
+                setStatusFilter('all');
+                setShowForm(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              New Assignment
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="space-y-1">
           {filteredAssignments.map((assignment) => {
@@ -429,8 +461,10 @@ export default function AssignmentsPage() {
                   assignment.status === 'COMPLETED' ? 'opacity-50' : ''
                 }`}
               >
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   className="mt-0.5"
                   onClick={() =>
                     updateAssignmentStatusMutation.mutate({
@@ -442,7 +476,7 @@ export default function AssignmentsPage() {
                   aria-label={`Mark ${assignment.title} as ${assignment.status === 'COMPLETED' ? 'todo' : 'completed'}`}
                 >
                   {getStatusIcon(assignment.status)}
-                </button>
+                </Button>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-4">
@@ -523,6 +557,7 @@ export default function AssignmentsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Delete ${assignment.title}`}
                         onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
                         disabled={assignment.isPending}
                       >
