@@ -1,215 +1,115 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Calendar,
-  CheckCircle2,
-  Circle,
-  FileText,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
-import {
-  createAssignment,
-  deleteAssignment,
-  updateAssignmentStatus,
-} from '@/lib/actions';
-import {
-  getAssignmentsPageData,
-  type AssignmentsPageData,
-} from '@/lib/dashboard-queries';
+import { Check, FileText, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
+import { createAssignment, deleteAssignment, updateAssignment, updateAssignmentStatus } from '@/lib/actions';
+import { getAssignmentsPageData, type AssignmentsPageData } from '@/lib/dashboard-queries';
 import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
-import { getDueStatus } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { cn, formatRelativeDate, formatStatus } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogActions,
+  AlertDialogDescription,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectItem } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
+import { AssignmentDetailDrawer } from '@/components/dashboard/assignment-detail-drawer';
+import { QuickCaptureModal } from '@/components/dashboard/quick-capture-modal';
+import { AssignmentRowSkeleton } from '@/components/dashboard/row-skeletons';
+import { StatusDot } from '@/components/dashboard/status-dot';
+import { NewShortcutKbd } from '@/components/dashboard/new-shortcut-kbd';
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
-
 type AssignmentStatus = (typeof STATUS_OPTIONS)[number];
+
+function getNextStatus(status: AssignmentStatus): AssignmentStatus {
+  if (status === 'TODO') return 'IN_PROGRESS';
+  if (status === 'IN_PROGRESS') return 'COMPLETED';
+  return 'TODO';
+}
 
 type CreateAssignmentInput = {
   title: string;
   description: string;
   dueDate: string;
   subjectId: number;
+  createMore: boolean;
 };
-
-function getStatusIcon(status: AssignmentStatus) {
-  return status === 'COMPLETED' ? (
-    <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-  ) : (
-    <Circle className="h-5 w-5 text-muted-foreground" />
-  );
-}
-
-function formatDate(dateValue: Date | string | null) {
-  if (!dateValue) {
-    return 'No due date';
-  }
-
-  const status = getDueStatus(dateValue);
-  const date = new Date(dateValue);
-
-  if (status === 'overdue') return 'Overdue';
-  if (status === 'today') return 'Today';
-
-  const tomorrow = new Date();
-  tomorrow.setHours(0, 0, 0, 0);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const current = new Date(date);
-  current.setHours(0, 0, 0, 0);
-
-  if (current.getTime() === tomorrow.getTime()) {
-    return 'Tomorrow';
-  }
-
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 export default function AssignmentsPage() {
   const { user, isLoaded } = useUser();
   const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newDueDate, setNewDueDate] = useState('');
-  const [newSubjectId, setNewSubjectId] = useState<number | null>(null);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [quickCaptureKey, setQuickCaptureKey] = useState(0);
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
-  const assignmentsQueryKey = user
-    ? dashboardQueryKeys.assignments(user.id)
-    : ['dashboard', 'assignments', 'anonymous'];
+  const assignmentsQueryKey = user ? dashboardQueryKeys.assignments(user.id) : ['dashboard', 'assignments', 'anonymous'];
   const assignmentsQuery = useQuery({
     queryKey: assignmentsQueryKey,
     queryFn: () => getAssignmentsPageData(user!.id),
     enabled: isLoaded && !!user,
   });
 
+  const openQuickCapture = useCallback(() => {
+    setQuickCaptureKey((key) => key + 1);
+    setQuickCaptureOpen(true);
+  }, []);
+
   const createAssignmentMutation = useMutation({
     mutationFn: (variables: CreateAssignmentInput) =>
-      createAssignment(
-        variables.subjectId,
-        variables.title,
-        variables.description.trim() || null,
-        variables.dueDate ? new Date(variables.dueDate) : null
-      ),
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-
-      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-      const tempId = -Date.now();
-      const subject = previousData?.subjects.find((item) => item.id === variables.subjectId);
-
-      setNewTitle('');
-      setNewDescription('');
-      setNewDueDate('');
-      setNewSubjectId(null);
-      setShowForm(false);
-
-      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current || !subject) {
-          return current;
-        }
-
-        return {
-          ...current,
-          assignments: [
-            {
-              id: tempId,
-              title: variables.title,
-              description: variables.description.trim() || null,
-              dueDate: variables.dueDate || null,
-              status: 'TODO',
-              subjectId: subject.id,
-              subjectName: subject.name,
-              subjectColor: subject.color,
-              isPending: true,
-            },
-            ...current.assignments,
-          ],
-        };
-      });
-
-      return { previousData, tempId, variables };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
+      createAssignment(variables.subjectId, variables.title, variables.description.trim() || null, variables.dueDate ? new Date(variables.dueDate) : null),
+    onSuccess: (_data, variables) => {
+      if (!variables.createMore) {
+        setQuickCaptureOpen(false);
       }
-
-      if (context?.variables) {
-        setNewTitle(context.variables.title);
-        setNewDescription(context.variables.description);
-        setNewDueDate(context.variables.dueDate);
-        setNewSubjectId(context.variables.subjectId);
-        setShowForm(true);
-      }
-    },
-    onSuccess: (createdAssignment, _variables, context) => {
-      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current || !context) {
-          return current;
-        }
-
-        return {
-          ...current,
-          assignments: current.assignments.map((assignment) =>
-            assignment.id === context.tempId
-              ? {
-                  ...assignment,
-                  id: createdAssignment.id,
-                  isPending: false,
-                }
-              : assignment
-          ),
-        };
-      });
-
       void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
     },
   });
 
   const updateAssignmentStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: AssignmentStatus }) =>
-      updateAssignmentStatus(id, status),
+    mutationFn: ({ id, status }: { id: number; status: AssignmentStatus }) => updateAssignmentStatus(id, status),
     onMutate: async ({ id, status }) => {
       await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-
       const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-
       queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          assignments: current.assignments.map((assignment) =>
-            assignment.id === id ? { ...assignment, status } : assignment
-          ),
-        };
+        if (!current) return current;
+        return { ...current, assignments: current.assignments.map((a) => (a.id === id ? { ...a, status } : a)) };
       });
-
       return { previousData };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
-      }
+      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
+    },
+  });
+
+  const updateAssignmentDescriptionMutation = useMutation({
+    mutationFn: ({ id, title, description, dueDate }: { id: number; title: string; description: string | null; dueDate: Date | string | null }) =>
+      updateAssignment(id, title, description, dueDate ? new Date(dueDate) : null),
+    onMutate: async ({ id, description }) => {
+      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
+      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
+      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
+        if (!current) return current;
+        return { ...current, assignments: current.assignments.map((a) => (a.id === id ? { ...a, description } : a)) };
+      });
+      return { previousData };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
@@ -220,28 +120,19 @@ export default function AssignmentsPage() {
     mutationFn: (id: number) => deleteAssignment(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-
       const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-
       queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          assignments: current.assignments.filter((assignment) => assignment.id !== id),
-        };
+        if (!current) return current;
+        return { ...current, assignments: current.assignments.filter((a) => a.id !== id) };
       });
-
+      if (detailId === id) setDetailId(null);
       return { previousData };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(assignmentsQueryKey, context.previousData);
-      }
+      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
     },
     onSettled: () => {
+      setDeleteId(null);
       void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
     },
   });
@@ -250,176 +141,105 @@ export default function AssignmentsPage() {
   const subjects = assignmentsQuery.data?.subjects ?? [];
 
   const filteredAssignments = assignments.filter((assignment) => {
-    if (subjectFilter !== 'all' && assignment.subjectId !== Number(subjectFilter)) {
-      return false;
-    }
-
-    if (statusFilter !== 'all' && assignment.status !== statusFilter) {
-      return false;
-    }
-
-    if (
-      search &&
-      !`${assignment.title} ${assignment.subjectName} ${assignment.description ?? ''}`
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    ) {
-      return false;
-    }
-
+    if (subjectFilter !== 'all' && assignment.subjectId !== Number(subjectFilter)) return false;
+    if (statusFilter !== 'all' && assignment.status !== statusFilter) return false;
+    if (search && !`${assignment.title} ${assignment.subjectName} ${assignment.description ?? ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const todoCount = filteredAssignments.filter((assignment) => assignment.status === 'TODO').length;
-  const inProgressCount = filteredAssignments.filter((assignment) => assignment.status === 'IN_PROGRESS').length;
-  const completedCount = filteredAssignments.filter((assignment) => assignment.status === 'COMPLETED').length;
+  const todoCount = filteredAssignments.filter((a) => a.status === 'TODO').length;
+  const inProgressCount = filteredAssignments.filter((a) => a.status === 'IN_PROGRESS').length;
+  const completedCount = filteredAssignments.filter((a) => a.status === 'COMPLETED').length;
+  const assignmentToDelete = assignments.find((a) => a.id === deleteId);
+  const detailAssignment = detailId != null ? assignments.find((a) => a.id === detailId) ?? null : null;
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target?.matches('input, textarea, select, [contenteditable="true"]');
+      if (!isTyping && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        openQuickCapture();
+      }
+    }
+    function onOpenEvent() {
+      openQuickCapture();
+    }
+    function onMountOpen() {
+      if (window.sessionStorage.getItem('cc:open-quick-capture') === '1') {
+        window.sessionStorage.removeItem('cc:open-quick-capture');
+        openQuickCapture();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('cc:open-quick-capture-assignment', onOpenEvent);
+    onMountOpen();
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('cc:open-quick-capture-assignment', onOpenEvent);
+    };
+  }, [openQuickCapture]);
 
   if (!isLoaded || assignmentsQuery.isLoading) {
     return (
-      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-        <Spinner className="h-4 w-4" />
-        Loading assignments...
+      <div className="space-y-6">
+        <div className="flex items-end justify-between">
+          <div>
+            <div className="h-6 w-32 animate-skeleton rounded-md" />
+            <div className="mt-2 h-4 w-48 animate-skeleton rounded-md" />
+          </div>
+          <div className="h-8 w-28 animate-skeleton rounded-md" />
+        </div>
+        <div className="space-y-1.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <AssignmentRowSkeleton key={i} delay={i * 60} />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (assignmentsQuery.isError) {
     return (
-      <Alert variant="error">
-        <AlertTitle>Unable to load assignments</AlertTitle>
-        <AlertDescription>Refresh the page and try again.</AlertDescription>
-      </Alert>
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+        <p className="text-sm font-medium text-destructive">Unable to load assignments</p>
+        <p className="mt-1 text-xs text-muted-foreground">Refresh the page and try again.</p>
+      </div>
     );
   }
 
   return (
-    <div className="animate-fade-in space-y-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-medium tracking-tight">Assignments</h1>
-          <p className="mt-1 text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Assignments</h1>
+          <p className="mt-1 text-sm text-muted-foreground/80">
             {todoCount} to do · {inProgressCount} in progress · {completedCount} completed
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {showForm ? 'Close Form' : 'New Assignment'}
+        <Button onClick={openQuickCapture} size="sm">
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          New
+          <NewShortcutKbd />
         </Button>
       </div>
 
-      {showForm && (
-        <div className="overflow-hidden rounded-xl border border-border/80 bg-background/80">
-          <div className="grid gap-0 md:grid-cols-12">
-            <div className="space-y-2 p-4 md:col-span-7 md:border-b md:border-r md:border-border/70">
-              <Label htmlFor="assignment-title" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Title
-              </Label>
-              <Input
-                id="assignment-title"
-                type="text"
-                placeholder="Assignment title"
-                value={newTitle}
-                onChange={(event) => setNewTitle(event.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-5 md:border-t-0 md:border-b">
-              <Label htmlFor="assignment-subject" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Subject
-              </Label>
-              <Select
-                id="assignment-subject"
-                value={newSubjectId?.toString() ?? ''}
-                onChange={(event) => setNewSubjectId(event.target.value ? Number(event.target.value) : null)}
-              >
-                <SelectItem value="">Select subject</SelectItem>
-                {subjects.map((subject) => (
-                  <SelectItem key={subject.id} value={subject.id.toString()}>
-                    {subject.name}
-                  </SelectItem>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2 border-t border-border/70 p-4 md:col-span-12 md:border-t-0 md:border-b">
-              <Label htmlFor="assignment-description" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Description
-              </Label>
-              <Textarea
-                id="assignment-description"
-                value={newDescription}
-                onChange={(event) => setNewDescription(event.target.value)}
-                placeholder="Context, notes, or what needs to get done"
-                rows={4}
-              />
-            </div>
-            <div className="space-y-2 p-4 md:col-span-5 lg:col-span-4">
-              <Label htmlFor="assignment-due-date" className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Due date
-              </Label>
-              <DatePicker
-                id="assignment-due-date"
-                value={newDueDate}
-                onChange={setNewDueDate}
-                placeholder="Choose a deadline"
-              />
-            </div>
-          </div>
-          <div className="flex items-center justify-end border-t border-border/70 px-4 py-4">
-            <Button
-              onClick={() =>
-                newSubjectId &&
-                createAssignmentMutation.mutate({
-                  title: newTitle.trim(),
-                  description: newDescription,
-                  dueDate: newDueDate,
-                  subjectId: newSubjectId,
-                })
-              }
-              disabled={!newTitle.trim() || !newSubjectId}
-              loading={createAssignmentMutation.isPending}
-            >
-              Save Assignment
-            </Button>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input type="search" placeholder="Search assignments..." inputClassName="pl-8 h-8 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-      )}
-
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search assignments..."
-            inputClassName="pl-9"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Select
-            aria-label="Filter assignments by subject"
-            value={subjectFilter}
-            onChange={(event) => setSubjectFilter(event.target.value)}
-            className="min-w-40"
-          >
+        <div className="flex items-center gap-2">
+          <Select aria-label="Filter by subject" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)} className="h-8 text-sm">
             <SelectItem value="all">All subjects</SelectItem>
-            {subjects.map((subject) => (
-              <SelectItem key={subject.id} value={subject.id.toString()}>
-                {subject.name}
-              </SelectItem>
+            {subjects.map((s) => (
+              <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
             ))}
           </Select>
-          <Select
-            aria-label="Filter assignments by status"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="min-w-40"
-          >
+          <Select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 text-sm">
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_OPTIONS.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status.replace('_', ' ')}
-              </SelectItem>
+            {STATUS_OPTIONS.map((s) => (
+              <SelectItem key={s} value={s}>{formatStatus(s)}</SelectItem>
             ))}
           </Select>
         </div>
@@ -428,149 +248,197 @@ export default function AssignmentsPage() {
       {filteredAssignments.length === 0 ? (
         <Empty>
           <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileText className="h-6 w-6 text-muted-foreground" />
-            </EmptyMedia>
+            <EmptyMedia variant="icon"><FileText className="h-5 w-5 text-muted-foreground" /></EmptyMedia>
             <EmptyTitle>No assignments</EmptyTitle>
             <EmptyDescription>Create your first assignment to get started.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button
-              aria-label="Create first assignment"
-              onClick={() => {
-                setSearch('');
-                setSubjectFilter('all');
-                setStatusFilter('all');
-                setShowForm(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              New Assignment
+            <Button aria-label="Create first assignment" onClick={openQuickCapture} size="sm">
+              <Plus className="h-3.5 w-3.5" />
+              New assignment
             </Button>
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="space-y-1">
-          {filteredAssignments.map((assignment) => {
-            const formattedDate = formatDate(assignment.dueDate);
-
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {filteredAssignments.map((assignment, index) => {
+            const isCompleted = assignment.status === 'COMPLETED';
+            const due = formatRelativeDate(assignment.dueDate);
+            const delay = Math.min(index, 8) * 30;
             return (
               <div
                 key={assignment.id}
-                className={`group -mx-4 flex items-start gap-4 rounded-lg px-4 py-4 transition-colors hover:bg-accent/50 ${
-                  assignment.status === 'COMPLETED' ? 'opacity-50' : ''
-                }`}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="mt-0.5"
-                  onClick={() =>
-                    updateAssignmentStatusMutation.mutate({
-                      id: assignment.id,
-                      status: assignment.status === 'COMPLETED' ? 'TODO' : 'COMPLETED',
-                    })
+                className="row-enter group flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50 focus-visible:bg-accent focus-visible:outline-none"
+                style={{ ['--row-enter-delay' as string]: `${delay}ms` }}
+                onClick={() => setDetailId(assignment.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setDetailId(assignment.id);
                   }
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateAssignmentStatusMutation.mutate({ id: assignment.id, status: getNextStatus(assignment.status) });
+                  }}
                   disabled={assignment.isPending}
-                  aria-label={`Mark ${assignment.title} as ${assignment.status === 'COMPLETED' ? 'todo' : 'completed'}`}
+                  className={cn(
+                    'rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card'
+                  )}
+                  aria-label={`Change status for ${assignment.title}`}
+                  title={`Status: ${formatStatus(assignment.status)}`}
                 >
-                  {getStatusIcon(assignment.status)}
-                </Button>
+                  <StatusDot status={assignment.status} interactive />
+                </button>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={
-                            assignment.status === 'COMPLETED'
-                              ? 'font-medium text-muted-foreground line-through'
-                              : 'font-medium'
-                          }
-                        >
-                          {assignment.title}
-                        </span>
-                        {assignment.status === 'IN_PROGRESS' && <Badge variant="secondary">In Progress</Badge>}
-                        {formattedDate === 'Overdue' && assignment.status !== 'COMPLETED' && (
-                          <Badge variant="destructive">Overdue</Badge>
-                        )}
-                        {formattedDate === 'Today' && assignment.status !== 'COMPLETED' && (
-                          <Badge variant="warning">Today</Badge>
-                        )}
-                      </div>
-                      {assignment.description && (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                          {assignment.description}
-                        </p>
-                      )}
-                    </div>
+                  <span className={cn('block truncate text-sm', isCompleted ? 'text-muted-foreground line-through' : 'font-medium')}>
+                    {assignment.title}
+                  </span>
+                  {assignment.description && (
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground/80">{assignment.description}</p>
+                  )}
+                </div>
 
-                    <div className="shrink-0 text-right">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span
-                          className={
-                            formattedDate === 'Overdue'
-                              ? 'font-medium text-destructive'
-                              : formattedDate === 'Today'
-                                ? 'font-medium text-warning'
-                                : ''
-                          }
-                        >
-                          {formattedDate}
-                        </span>
-                      </div>
-                    </div>
+                <div className="hidden shrink-0 items-center gap-4 text-xs sm:flex">
+                  <div className="flex items-center gap-1.5 text-muted-foreground/80">
+                    <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: assignment.subjectColor }} />
+                    {assignment.subjectName}
                   </div>
+                  <span
+                    className={cn(
+                      'tabular-nums',
+                      due.status === 'overdue' && !isCompleted ? 'font-medium text-destructive' :
+                        due.status === 'today' && !isCompleted ? 'font-medium text-warning' :
+                          'text-muted-foreground'
+                    )}
+                    title={due.fullLabel}
+                  >
+                    {due.label}
+                  </span>
+                </div>
 
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: assignment.subjectColor }}
-                        />
-                        <span className="text-sm text-muted-foreground">{assignment.subjectName}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select
-                        aria-label={`Change status for ${assignment.title}`}
-                        value={assignment.status}
-                        onChange={(event) =>
-                          updateAssignmentStatusMutation.mutate({
-                            id: assignment.id,
-                            status: event.target.value as AssignmentStatus,
-                          })
-                        }
-                        disabled={assignment.isPending}
-                        className="h-9 min-w-36 px-3 text-xs"
-                      >
-                        {STATUS_OPTIONS.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {status.replace('_', ' ')}
-                          </SelectItem>
-                        ))}
-                      </Select>
+                <Popover>
+                  <PopoverTrigger
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    render={
                       <Button
                         variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${assignment.title}`}
-                        onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
+                        size="icon-xs"
+                        aria-label={`Open actions for ${assignment.title}`}
+                        className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
                         disabled={assignment.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      />
+                    }
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </PopoverTrigger>
+                  <PopoverPopup
+                    align="end"
+                    sideOffset={4}
+                    className="w-48"
+                    viewportClassName="p-1 py-1 [--viewport-inline-padding:--spacing(0.5)]"
+                  >
+                    <div className="px-2 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                      Set status
                     </div>
-                  </div>
-                </div>
+                    {STATUS_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateAssignmentStatusMutation.mutate({ id: assignment.id, status: s });
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-accent',
+                          assignment.status === s && 'bg-accent/50 text-foreground'
+                        )}
+                      >
+                        <StatusDot status={s} size="sm" />
+                        {formatStatus(s)}
+                        {assignment.status === s && <Check className="ml-auto h-3.5 w-3.5 text-muted-foreground" />}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-border" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteId(assignment.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </PopoverPopup>
+                </Popover>
               </div>
             );
           })}
         </div>
       )}
+
+      <AssignmentDetailDrawer
+        assignment={detailAssignment}
+        open={detailId != null}
+        onOpenChange={(open) => !open && setDetailId(null)}
+        onStatusChange={(status) => {
+          if (detailAssignment) updateAssignmentStatusMutation.mutate({ id: detailAssignment.id, status });
+        }}
+        onDescriptionChange={(description) => {
+          if (detailAssignment) {
+            updateAssignmentDescriptionMutation.mutate({
+              id: detailAssignment.id,
+              title: detailAssignment.title,
+              description,
+              dueDate: detailAssignment.dueDate,
+            });
+          }
+        }}
+        onDelete={() => {
+          if (detailAssignment) {
+            setDeleteId(detailAssignment.id);
+          }
+        }}
+      />
+
+      <QuickCaptureModal
+        key={quickCaptureKey}
+        open={quickCaptureOpen}
+        onOpenChange={setQuickCaptureOpen}
+        subjects={subjects}
+        onSave={(input) => {
+          if (input.subjectId == null) return;
+          createAssignmentMutation.mutate({
+            title: input.title,
+            description: '',
+            dueDate: input.dueDate,
+            subjectId: input.subjectId,
+            createMore: input.createMore,
+          });
+        }}
+        saving={createAssignmentMutation.isPending}
+      />
+
+      <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogPopup>
+          <AlertDialogTitle>Delete assignment?</AlertDialogTitle>
+          <AlertDialogDescription>{assignmentToDelete?.title} will be permanently removed.</AlertDialogDescription>
+          <AlertDialogActions
+            destructive
+            confirmLabel="Delete"
+            onConfirm={() => deleteId != null && deleteAssignmentMutation.mutate(deleteId)}
+            loading={deleteAssignmentMutation.isPending}
+          />
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 }
