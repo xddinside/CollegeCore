@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
 import { createSemester, createSubject } from '@/lib/actions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,31 +30,29 @@ function splitName(name: string) {
 
 export default function OnboardingPage() {
   const { user, isLoaded } = useUser();
+  const router = useRouter();
   const [step, setStep] = useState(1);
-  const [displayName, setDisplayName] = useState('');
+  const [editedDisplayName, setEditedDisplayName] = useState('');
   const [semester, setSemester] = useState('Sem I');
-  const [subjects, setSubjects] = useState<{ name: string; color: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string; color: string }[]>([]);
   const [newSubject, setNewSubject] = useState('');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoaded || !user || displayName) return;
-    const name = user.fullName || user.firstName || '';
-    if (name) setDisplayName(name);
-  }, [isLoaded, user, displayName]);
+  const displayName =
+    editedDisplayName || (isLoaded ? user?.fullName || user?.firstName || '' : '');
 
   const addSubject = () => {
     const name = newSubject.trim();
     if (!name) return;
     if (subjects.some((s) => s.name.toLowerCase() === name.toLowerCase())) return;
-    setSubjects([...subjects, { name, color: selectedColor }]);
+    setSubjects([...subjects, { id: crypto.randomUUID(), name, color: selectedColor }]);
     setNewSubject('');
   };
 
-  const removeSubject = (index: number) => {
-    setSubjects(subjects.filter((_, i) => i !== index));
+  const removeSubject = (id: string) => {
+    setSubjects(subjects.filter((s) => s.id !== id));
   };
 
   const canProceed = () => {
@@ -82,11 +81,10 @@ export default function OnboardingPage() {
         subjects.map((s) => createSubject(createdSemester.id, s.name, s.color))
       );
 
-      window.location.assign('/dashboard');
+      router.push('/dashboard');
     } catch (err) {
       console.error(err);
       setError('Could not finish setting up your semester. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -104,9 +102,9 @@ export default function OnboardingPage() {
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 md:px-6">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-5xl gap-8 lg:grid-cols-2 lg:items-center">
-        <section className="space-y-6">
-          <div className="space-y-2">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-5xl gap-10 lg:grid-cols-2 lg:items-center">
+        <section className="space-y-5">
+          <div className="space-y-1.5">
             <h1 className="text-3xl font-medium tracking-tight md:text-4xl">
               {step === 1 && 'What should we call you?'}
               {step === 2 && 'Which semester are you in?'}
@@ -119,11 +117,12 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2" aria-label="Onboarding progress">
             {[1, 2, 3].map((s) => (
               <div
                 key={s}
-                className={`h-2 flex-1 rounded-full transition-colors ${
+                aria-current={s === step ? 'step' : undefined}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${
                   s <= step ? 'bg-primary' : 'bg-secondary'
                 }`}
               />
@@ -131,18 +130,17 @@ export default function OnboardingPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card p-6 md:p-8">
+        <section className="rounded-lg border border-border bg-card p-6 md:p-8">
           {step === 1 && (
-            <div className="space-y-6">
-              <div className="space-y-2">
+            <div className="space-y-5">
+              <div className="space-y-1.5">
                 <Label htmlFor="display-name">Your name</Label>
                 <Input
                   id="display-name"
                   type="text"
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => setEditedDisplayName(e.target.value)}
                   placeholder="e.g. Alex"
-                  autoFocus
                 />
               </div>
 
@@ -156,8 +154,8 @@ export default function OnboardingPage() {
           )}
 
           {step === 2 && (
-            <div className="space-y-6">
-              <div className="space-y-2">
+            <div className="space-y-5">
+              <div className="space-y-1.5">
                 <Label htmlFor="semester">Semester</Label>
                 <Select
                   id="semester"
@@ -171,8 +169,8 @@ export default function OnboardingPage() {
               </div>
 
               <div className="flex justify-between">
-                <Button variant="ghost" onClick={() => setStep(1)}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
+                <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" />
                   Back
                 </Button>
                 <Button onClick={() => setStep(3)}>
@@ -184,7 +182,7 @@ export default function OnboardingPage() {
           )}
 
           {step === 3 && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-4">
                 <div className="flex gap-2">
                   <Input
@@ -208,8 +206,8 @@ export default function OnboardingPage() {
                       onClick={() => setSelectedColor(color)}
                       aria-label={`Choose ${color}`}
                       aria-pressed={selectedColor === color}
-                      className={`h-6 w-6 rounded-full transition-transform ${
-                        selectedColor === color ? 'ring-2 ring-primary ring-offset-2' : ''
+                      className={`h-5 w-5 rounded-full transition-transform motion-safe:active:scale-95 ${
+                        selectedColor === color ? 'ring-2 ring-primary ring-offset-2 ring-offset-card' : ''
                       }`}
                       style={{ backgroundColor: color }}
                     />
@@ -218,18 +216,18 @@ export default function OnboardingPage() {
 
                 {subjects.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {subjects.map((subject, index) => (
+                    {subjects.map((subject) => (
                       <div
-                        key={`${subject.name}-${index}`}
-                        className="flex items-center gap-2 rounded-full border border-border bg-accent/50 px-3 py-1.5 text-sm"
+                        key={subject.id}
+                        className="flex items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-sm"
                       >
                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: subject.color }} />
                         <span>{subject.name}</span>
                         <button
                           type="button"
-                          onClick={() => removeSubject(index)}
+                          onClick={() => removeSubject(subject.id)}
                           aria-label={`Remove ${subject.name}`}
-                          className="ml-1 text-muted-foreground hover:text-foreground"
+                          className="ml-1 text-muted-foreground transition-colors hover:text-foreground"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -246,8 +244,8 @@ export default function OnboardingPage() {
               </div>
 
               <div className="flex justify-between">
-                <Button variant="ghost" onClick={() => setStep(2)}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
+                <Button variant="ghost" size="sm" onClick={() => setStep(2)}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" />
                   Back
                 </Button>
                 <Button onClick={handleSubmit} disabled={!canProceed()} loading={loading}>

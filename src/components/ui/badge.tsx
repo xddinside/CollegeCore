@@ -7,7 +7,7 @@ import type React from 'react';
 import { cn } from '@/lib/utils';
 
 export const badgeVariants = cva(
-  "relative inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm border border-transparent font-medium outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [button&,a&]:cursor-pointer [button&,a&]:pointer-coarse:after:absolute [button&,a&]:pointer-coarse:after:size-full [button&,a&]:pointer-coarse:after:min-h-11 [button&,a&]:pointer-coarse:after:min-w-11",
+  "relative inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm border border-transparent font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3 [&_svg]:pointer-events-none [&_svg]:shrink-0 [button&,a&]:cursor-pointer [button&,a&]:pointer-coarse:after:absolute [button&,a&]:pointer-coarse:after:size-full [button&,a&]:pointer-coarse:after:min-h-11 [button&,a&]:pointer-coarse:after:min-w-11",
   {
     defaultVariants: {
       size: 'default',
@@ -25,14 +25,14 @@ export const badgeVariants = cva(
           'bg-primary text-primary-foreground [button&,a&]:hover:bg-primary/90',
         destructive:
           'bg-destructive text-white [button&,a&]:hover:bg-destructive/90',
-        error: 'bg-destructive/8 text-destructive-foreground dark:bg-destructive/16',
-        info: 'bg-info/8 text-info-foreground dark:bg-info/16',
+        error: 'bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive-foreground',
+        info: 'bg-info/10 text-info dark:bg-info/20 dark:text-info-foreground',
         outline:
-          'border-input bg-background text-foreground dark:bg-input/32 [button&,a&]:hover:bg-accent/50 dark:[button&,a&]:hover:bg-input/48',
+          'border-transparent bg-background text-foreground ring-1 ring-stone-950/10 dark:bg-input/32 dark:ring-white/10 [button&,a&]:hover:bg-accent/50 dark:[button&,a&]:hover:bg-input/48',
         secondary:
           'bg-secondary text-secondary-foreground [button&,a&]:hover:bg-secondary/90',
-        success: 'bg-success/8 text-success-foreground dark:bg-success/16',
-        warning: 'bg-warning/8 text-warning-foreground dark:bg-warning/16',
+        success: 'bg-success/14 text-success dark:bg-success/20 dark:text-success-foreground',
+        warning: 'bg-warning/14 text-warning dark:bg-warning/20 dark:text-warning-foreground',
       },
     },
   }
