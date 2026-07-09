@@ -1,15 +1,15 @@
-'use client';
+import { cn } from '@/lib/utils';
 
-import { useUser } from '@clerk/nextjs';
-
-export function DashboardGreeting() {
-  const { user, isLoaded } = useUser();
-
-  if (!isLoaded) {
-    return <h1 className="text-2xl font-medium tracking-tight md:text-3xl">Welcome back</h1>;
-  }
-
-  const name = user?.firstName || user?.fullName || 'there';
-
-  return <h1 className="text-2xl font-medium tracking-tight md:text-3xl">Welcome back, {name}</h1>;
+export function DashboardGreeting({
+  className,
+  name,
+}: {
+  className?: string;
+  name?: string | null;
+}) {
+  return (
+    <h1 className={cn('text-2xl font-semibold tracking-tight md:text-3xl', className)}>
+      Welcome back{name ? `, ${name}` : ''}
+    </h1>
+  );
 }

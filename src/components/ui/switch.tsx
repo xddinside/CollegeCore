@@ -1,34 +1,28 @@
 'use client';
 
-import type { ButtonHTMLAttributes } from 'react';
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch';
+import type React from 'react';
 import { cn } from '@/lib/utils';
 
-type SwitchProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> & {
-  checked: boolean;
-};
-
-export function Switch({ checked, className, ...props }: SwitchProps) {
+export function Switch({
+  className,
+  ...props
+}: SwitchPrimitive.Root.Props): React.ReactElement {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
+    <SwitchPrimitive.Root
       className={cn(
-        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors',
-        checked
-          ? 'border-primary bg-primary'
-          : 'border-border bg-secondary text-secondary-foreground',
+        'inline-flex h-[calc(var(--thumb-size)+2px)] w-[calc(var(--thumb-size)*2-2px)] shrink-0 items-center rounded-full p-px outline-none [--thumb-size:--spacing(5)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-disabled:cursor-not-allowed data-checked:bg-primary data-unchecked:bg-input data-disabled:opacity-64 sm:[--thumb-size:--spacing(4)]',
         className
       )}
+      data-slot="switch"
       {...props}
     >
-      <span
-        className={cn(
-          'inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform',
-          checked ? 'translate-x-6' : 'translate-x-1'
-        )}
+      <SwitchPrimitive.Thumb
+        className="pointer-events-none block aspect-square h-full origin-left in-[[role=switch]:active,[data-slot=label]:active,[data-slot=field-label]:active]:not-data-disabled:scale-x-110 in-[[role=switch]:active,[data-slot=label]:active,[data-slot=field-label]:active]:rounded-[var(--thumb-size)/calc(var(--thumb-size)*1.1)] rounded-(--thumb-size) bg-background shadow-sm/5 will-change-transform motion-safe:[transition:translate_.15s_var(--ease-out),border-radius_.15s_var(--ease-out),scale_.1s_.1s_var(--ease-out),transform-origin_.15s_var(--ease-out)] data-checked:origin-[var(--thumb-size)_50%] data-checked:translate-x-[calc(var(--thumb-size)-4px)]"
+        data-slot="switch-thumb"
       />
-      <span className="sr-only">{checked ? 'Enabled' : 'Disabled'}</span>
-    </button>
+    </SwitchPrimitive.Root>
   );
 }
+
+export { SwitchPrimitive };

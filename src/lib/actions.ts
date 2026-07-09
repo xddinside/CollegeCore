@@ -1,10 +1,27 @@
 'use server';
 
 import { cache } from 'react';
+import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { users, semesters, subjects, assignments, todos, examSprints, sprintSessions, attachments } from '@/db/schema';
 import { eq, and, asc, desc, gte, ne, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import {
+  assertAssignmentOwner,
+  assertExamSprintOwner,
+  assertSprintSessionOwner,
+  assertSubjectOwner,
+  assertTodoOwner,
+  UnauthorizedError,
+} from '@/lib/authz/resource-authz';
+
+async function requireAuth(): Promise<string> {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new UnauthorizedError('You must be signed in');
+  }
+  return userId;
+}
 
 export async function createUserClerk(clerkId: string, email: string) {
   await db.insert(users).values({ clerkId, email }).onDuplicateKeyUpdate({
@@ -58,11 +75,15 @@ export async function createSubject(semesterId: number, name: string, color: str
 }
 
 export async function updateSubject(id: number, name: string, color: string) {
+  const userId = await requireAuth();
+  await assertSubjectOwner(id, userId);
   await db.update(subjects).set({ name, color }).where(eq(subjects.id, id));
   revalidatePath('/dashboard');
 }
 
 export async function deleteSubject(id: number) {
+  const userId = await requireAuth();
+  await assertSubjectOwner(id, userId);
   await db.delete(subjects).where(eq(subjects.id, id));
   revalidatePath('/dashboard');
 }
@@ -105,6 +126,8 @@ export async function createAssignment(
 }
 
 export async function updateAssignmentStatus(id: number, status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED') {
+  const userId = await requireAuth();
+  await assertAssignmentOwner(id, userId);
   await db.update(assignments).set({ status }).where(eq(assignments.id, id));
   revalidatePath('/dashboard');
 }
@@ -115,11 +138,15 @@ export async function updateAssignment(
   description: string | null,
   dueDate: Date | null
 ) {
+  const userId = await requireAuth();
+  await assertAssignmentOwner(id, userId);
   await db.update(assignments).set({ title, description, dueDate }).where(eq(assignments.id, id));
   revalidatePath('/dashboard');
 }
 
 export async function deleteAssignment(id: number) {
+  const userId = await requireAuth();
+  await assertAssignmentOwner(id, userId);
   await db.delete(attachments).where(eq(attachments.assignmentId, id));
   await db.delete(assignments).where(eq(assignments.id, id));
   revalidatePath('/dashboard');
@@ -275,17 +302,23 @@ export async function createTodo(
 }
 
 export async function toggleTodo(id: number) {
+  const userId = await requireAuth();
+  await assertTodoOwner(id, userId);
   const [todo] = await db.select().from(todos).where(eq(todos.id, id));
   await db.update(todos).set({ isCompleted: !todo.isCompleted }).where(eq(todos.id, id));
   revalidatePath('/dashboard');
 }
 
 export async function setTodoCompleted(id: number, isCompleted: boolean) {
+  const userId = await requireAuth();
+  await assertTodoOwner(id, userId);
   await db.update(todos).set({ isCompleted }).where(eq(todos.id, id));
   revalidatePath('/dashboard');
 }
 
 export async function deleteTodo(id: number) {
+  const userId = await requireAuth();
+  await assertTodoOwner(id, userId);
   await db.delete(todos).where(eq(todos.id, id));
   revalidatePath('/dashboard');
 }
@@ -345,11 +378,15 @@ export async function createSprintSession(
 }
 
 export async function deleteSprintSession(id: number) {
+  const userId = await requireAuth();
+  await assertSprintSessionOwner(id, userId);
   await db.delete(sprintSessions).where(eq(sprintSessions.id, id));
   revalidatePath('/dashboard');
 }
 
 export async function deleteExamSprint(id: number) {
+  const userId = await requireAuth();
+  await assertExamSprintOwner(id, userId);
   await db.delete(sprintSessions).where(eq(sprintSessions.sprintId, id));
   await db.delete(examSprints).where(eq(examSprints.id, id));
   revalidatePath('/dashboard');

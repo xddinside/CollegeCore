@@ -38,16 +38,30 @@ function getSslConfig() {
   };
 }
 
-const pool = mysql.createPool({
-  uri: getDatabaseUrl(),
-  ssl: getSslConfig(),
-  waitForConnections: true,
-  connectionLimit: 10,
-  maxIdle: 10,
-  idleTimeout: 60_000,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
-});
+declare global {
+  // eslint-disable-next-line no-var
+  var __db_pool: mysql.Pool | undefined;
+}
+
+// Next.js dev HMR re-evaluates module-scope code, creating duplicate pools
+// that exhaust DB connections. In development, cache the pool on globalThis
+// so hot reloads reuse one pool for the process lifetime.
+const pool: mysql.Pool =
+  globalThis.__db_pool ??
+  mysql.createPool({
+    uri: getDatabaseUrl(),
+    ssl: getSslConfig(),
+    waitForConnections: true,
+    connectionLimit: 10,
+    maxIdle: 10,
+    idleTimeout: 60_000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalThis.__db_pool = pool;
+}
 
 export const db = drizzle(pool, { schema, mode: 'default' });
 export { schema };
