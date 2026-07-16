@@ -31,7 +31,7 @@ export const assignments = mysqlTable('assignments', {
   subjectId: int('subject_id', { unsigned: true }).notNull(),
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description'),
-  dueDate: date('due_date'),
+  dueDate: date('due_date', { mode: 'string' }),
   status: mysqlEnum('status', ['TODO', 'IN_PROGRESS', 'COMPLETED']).default('TODO').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -49,7 +49,7 @@ export const todos = mysqlTable('todos', {
   semesterId: int('semester_id', { unsigned: true }).notNull(),
   subjectId: int('subject_id', { unsigned: true }),
   title: varchar('title', { length: 255 }).notNull(),
-  dueDate: date('due_date'),
+  dueDate: date('due_date', { mode: 'string' }),
   isCompleted: boolean('is_completed').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -58,15 +58,15 @@ export const examSprints = mysqlTable('exam_sprints', {
   id: int('id', { unsigned: true }).primaryKey().autoincrement(),
   semesterId: int('semester_id', { unsigned: true }).notNull(),
   name: varchar('name', { length: 100 }).notNull(),
-  startDate: date('start_date').notNull(),
-  endDate: date('end_date').notNull(),
+  startDate: date('start_date', { mode: 'string' }).notNull(),
+  endDate: date('end_date', { mode: 'string' }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 export const sprintSessions = mysqlTable('sprint_sessions', {
   id: int('id', { unsigned: true }).primaryKey().autoincrement(),
   sprintId: int('sprint_id', { unsigned: true }).notNull(),
-  date: date('date').notNull(),
+  date: date('date', { mode: 'string' }).notNull(),
   startTime: time('start_time').notNull(),
   endTime: time('end_time').notNull(),
   subjectId: int('subject_id', { unsigned: true }).notNull(),

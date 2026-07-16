@@ -1,13 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListTodo, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
-import { createTodo, deleteTodo, setTodoCompleted } from '@/lib/actions';
-import { getTodosPageData, type TodosPageData } from '@/lib/dashboard-queries';
-import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
-import { cn, formatRelativeDate } from '@/lib/utils';
+import { describeDueDate } from '@/lib/academic-day';
+import { useTodosDashboard } from '@/lib/dashboard/client-data';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogActions,
@@ -23,88 +20,31 @@ import { QuickCaptureModal } from '@/components/dashboard/quick-capture-modal';
 import { TodoRowSkeleton } from '@/components/dashboard/row-skeletons';
 import { NewShortcutKbd } from '@/components/dashboard/new-shortcut-kbd';
 
-type CreateTodoInput = {
-  title: string;
-  dueDate: string;
-  subjectId: number | null;
-  createMore: boolean;
-};
-
 export default function TodosPage() {
-  const { user, isLoaded } = useUser();
-  const queryClient = useQueryClient();
+  const {
+    data,
+    loading,
+    error,
+    createTodo,
+    creatingTodo,
+    setTodoCompleted,
+    settingTodoCompleted,
+    deleteTodo,
+    deletingTodo,
+  } = useTodosDashboard();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [quickCaptureKey, setQuickCaptureKey] = useState(0);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'done'>('all');
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const todosQueryKey = user ? dashboardQueryKeys.todos(user.id) : ['dashboard', 'todos', 'anonymous'];
-  const todosQuery = useQuery({
-    queryKey: todosQueryKey,
-    queryFn: () => getTodosPageData(user!.id),
-    enabled: isLoaded && !!user,
-  });
-
   const openQuickCapture = useCallback(() => {
     setQuickCaptureKey((key) => key + 1);
     setQuickCaptureOpen(true);
   }, []);
 
-  const createTodoMutation = useMutation({
-    mutationFn: async (variables: CreateTodoInput) => {
-      if (!todosQuery.data) throw new Error('Todos data not loaded');
-      return createTodo(todosQuery.data.semesterId, variables.title, variables.subjectId, variables.dueDate ? new Date(variables.dueDate) : null);
-    },
-    onSuccess: (_data, variables) => {
-      if (!variables.createMore) {
-        setQuickCaptureOpen(false);
-      }
-      void queryClient.invalidateQueries({ queryKey: todosQueryKey });
-    },
-  });
-
-  const toggleTodoMutation = useMutation({
-    mutationFn: ({ id, isCompleted }: { id: number; isCompleted: boolean }) => setTodoCompleted(id, isCompleted),
-    onMutate: async ({ id, isCompleted }) => {
-      await queryClient.cancelQueries({ queryKey: todosQueryKey });
-      const previousData = queryClient.getQueryData<TodosPageData>(todosQueryKey);
-      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, todos: current.todos.map((t) => (t.id === id ? { ...t, isCompleted } : t)) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(todosQueryKey, context.previousData);
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: todosQueryKey });
-    },
-  });
-
-  const deleteTodoMutation = useMutation({
-    mutationFn: (id: number) => deleteTodo(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: todosQueryKey });
-      const previousData = queryClient.getQueryData<TodosPageData>(todosQueryKey);
-      queryClient.setQueryData<TodosPageData>(todosQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, todos: current.todos.filter((t) => t.id !== id) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(todosQueryKey, context.previousData);
-    },
-    onSettled: () => {
-      setDeleteId(null);
-      void queryClient.invalidateQueries({ queryKey: todosQueryKey });
-    },
-  });
-
-  const todos = useMemo(() => todosQuery.data?.todos ?? [], [todosQuery.data?.todos]);
-  const subjects = useMemo(() => todosQuery.data?.subjects ?? [], [todosQuery.data?.subjects]);
+  const todos = useMemo(() => data?.todos ?? [], [data?.todos]);
+  const subjects = useMemo(() => data?.subjects ?? [], [data?.subjects]);
   const completedCount = useMemo(() => todos.filter((t) => t.isCompleted).length, [todos]);
   const todoToDelete = todos.find((t) => t.id === deleteId);
 
@@ -130,7 +70,7 @@ export default function TodosPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [openQuickCapture]);
 
-  if (!isLoaded || todosQuery.isLoading) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-end justify-between">
@@ -149,7 +89,7 @@ export default function TodosPage() {
     );
   }
 
-  if (todosQuery.isError) {
+  if (error) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
         <p className="text-sm font-medium text-destructive">Unable to load todos</p>
@@ -215,7 +155,7 @@ export default function TodosPage() {
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
           {filteredTodos.map((todo, index) => {
-            const due = formatRelativeDate(todo.dueDate);
+            const due = describeDueDate(todo.dueDate, new Date());
             const delay = Math.min(index, 8) * 30;
             return (
               <div
@@ -228,8 +168,8 @@ export default function TodosPage() {
               >
                 <button
                   type="button"
-                  onClick={() => toggleTodoMutation.mutate({ id: todo.id, isCompleted: !todo.isCompleted })}
-                  disabled={todo.isPending}
+                  onClick={() => setTodoCompleted({ id: todo.id, isCompleted: !todo.isCompleted })}
+                  disabled={todo.isPending || settingTodoCompleted}
                   className={cn(
                     'todo-checkbox-interactive flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-[transform,background-color,border-color] duration-150 ease-[var(--ease-out)] motion-safe:active:scale-90',
                     todo.isCompleted
@@ -302,7 +242,7 @@ export default function TodosPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => toggleTodoMutation.mutate({ id: todo.id, isCompleted: !todo.isCompleted })}
+                      onClick={() => setTodoCompleted({ id: todo.id, isCompleted: !todo.isCompleted })}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-accent"
                     >
                       <span className={cn('h-1.5 w-1.5 rounded-full', todo.isCompleted ? 'bg-muted-foreground/40' : 'bg-success')} />
@@ -337,8 +277,13 @@ export default function TodosPage() {
         saveLabel="Add todo"
         placeholder="What needs to get done?"
         subjectOptional
-        onSave={(input) => createTodoMutation.mutate({ title: input.title, dueDate: input.dueDate, subjectId: input.subjectId, createMore: input.createMore })}
-        saving={createTodoMutation.isPending}
+        onSave={async (input) => {
+          await createTodo({ title: input.title, dueDate: input.dueDate, subjectId: input.subjectId });
+          if (!input.createMore) {
+            setQuickCaptureOpen(false);
+          }
+        }}
+        saving={creatingTodo}
       />
 
       <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>
@@ -348,8 +293,8 @@ export default function TodosPage() {
           <AlertDialogActions
             destructive
             confirmLabel="Delete"
-            onConfirm={() => deleteId != null && deleteTodoMutation.mutate(deleteId)}
-            loading={deleteTodoMutation.isPending}
+            onConfirm={() => deleteId != null && deleteTodo(deleteId).finally(() => setDeleteId(null))}
+            loading={deletingTodo}
           />
         </AlertDialogPopup>
       </AlertDialog>

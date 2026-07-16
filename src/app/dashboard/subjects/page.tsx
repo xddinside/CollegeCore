@@ -1,12 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
-import { createSubject, deleteSubject, updateSubject } from '@/lib/actions';
-import { getSubjectsPageData, type SubjectsPageData } from '@/lib/dashboard-queries';
-import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { useSubjectsDashboard } from '@/lib/dashboard/client-data';
 import { cn, getContrastColor } from '@/lib/utils';
 import {
   AlertDialog,
@@ -23,12 +19,6 @@ import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { NewShortcutKbd } from '@/components/dashboard/new-shortcut-kbd';
 import { SubjectCardSkeleton } from '@/components/dashboard/row-skeletons';
 
-type SaveSubjectInput = {
-  id: number | null;
-  name: string;
-  color: string;
-};
-
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
   '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
@@ -36,8 +26,7 @@ const PRESET_COLORS = [
 ];
 
 export default function SubjectsPage() {
-  const { user, isLoaded } = useUser();
-  const queryClient = useQueryClient();
+  const { data, loading, error, saveSubject, savingSubject, deleteSubject, deletingSubject } = useSubjectsDashboard();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
@@ -46,91 +35,28 @@ export default function SubjectsPage() {
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const subjectsQueryKey = user ? dashboardQueryKeys.subjects(user.id) : ['dashboard', 'subjects', 'anonymous'];
-  const subjectsQuery = useQuery({
-    queryKey: subjectsQueryKey,
-    queryFn: () => getSubjectsPageData(user!.id),
-    enabled: isLoaded && !!user,
-  });
-
-  const saveSubjectMutation = useMutation({
-    mutationFn: async (variables: SaveSubjectInput) => {
-      if (!subjectsQuery.data) throw new Error('Subjects data not loaded');
-      if (variables.id) {
-        await updateSubject(variables.id, variables.name, variables.color);
-        return null;
-      }
-      return createSubject(subjectsQuery.data.semesterId, variables.name, variables.color);
-    },
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: subjectsQueryKey });
-      const previousData = queryClient.getQueryData<SubjectsPageData>(subjectsQueryKey);
-      const tempId = variables.id ? null : -Date.now();
-
-      setNewName('');
-      setNewColor(PRESET_COLORS[0]);
-      setShowForm(false);
-      setEditId(null);
-      setAttemptedSave(false);
-
-      queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
-        if (!current) return current;
-        if (variables.id) {
-          return { ...current, subjects: current.subjects.map((s) => (s.id === variables.id ? { ...s, name: variables.name, color: variables.color } : s)) };
-        }
-        return { ...current, subjects: [{ id: tempId!, name: variables.name, color: variables.color, isPending: true }, ...current.subjects] };
-      });
-      return { previousData, tempId, variables };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(subjectsQueryKey, context.previousData);
-      if (context?.variables) {
-        setNewName(context.variables.name);
-        setNewColor(context.variables.color);
-        setEditId(context.variables.id);
-        setShowForm(true);
-      }
-    },
-    onSuccess: (createdSubject, variables, context) => {
-      if (!variables.id && createdSubject && context?.tempId) {
-        queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
-          if (!current) return current;
-          return { ...current, subjects: current.subjects.map((s) => (s.id === context.tempId ? { ...s, id: createdSubject.id, isPending: false } : s)) };
-        });
-      }
-      void queryClient.invalidateQueries({ queryKey: subjectsQueryKey });
-    },
-  });
-
-  const deleteSubjectMutation = useMutation({
-    mutationFn: (id: number) => deleteSubject(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: subjectsQueryKey });
-      const previousData = queryClient.getQueryData<SubjectsPageData>(subjectsQueryKey);
-      queryClient.setQueryData<SubjectsPageData>(subjectsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, subjects: current.subjects.filter((s) => s.id !== id) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(subjectsQueryKey, context.previousData);
-    },
-    onSettled: () => {
-      setDeleteId(null);
-      void queryClient.invalidateQueries({ queryKey: subjectsQueryKey });
-    },
-  });
-
-  const subjects = subjectsQuery.data?.subjects ?? [];
-  const assignments = subjectsQuery.data?.assignments ?? [];
+  const subjects = data?.subjects ?? [];
+  const assignments = data?.assignments ?? [];
   const filteredSubjects = subjects.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
   const subjectToDelete = subjects.find((s) => s.id === deleteId);
 
-  function handleSave() {
+  async function handleSave() {
     setAttemptedSave(true);
     if (!newName.trim()) return;
-    saveSubjectMutation.mutate({ id: editId, name: newName.trim(), color: newColor });
+    const snapshot = { id: editId, name: newName.trim(), color: newColor };
+    setNewName('');
+    setNewColor(PRESET_COLORS[0]);
+    setShowForm(false);
+    setEditId(null);
+    setAttemptedSave(false);
+    try {
+      await saveSubject(snapshot);
+    } catch {
+      setNewName(snapshot.name);
+      setNewColor(snapshot.color);
+      setEditId(snapshot.id);
+      setShowForm(true);
+    }
   }
 
   useEffect(() => {
@@ -151,7 +77,7 @@ export default function SubjectsPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!isLoaded || subjectsQuery.isLoading) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-end justify-between">
@@ -170,7 +96,7 @@ export default function SubjectsPage() {
     );
   }
 
-  if (subjectsQuery.isError) {
+  if (error) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
         <p className="text-sm font-medium text-destructive">Unable to load subjects</p>
@@ -220,7 +146,7 @@ export default function SubjectsPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={handleSave} loading={saveSubjectMutation.isPending} size="sm">{editId ? 'Update' : 'Save'}</Button>
+            <Button onClick={handleSave} loading={savingSubject} size="sm">{editId ? 'Update' : 'Save'}</Button>
           </div>
         </div>
       )}
@@ -331,8 +257,8 @@ export default function SubjectsPage() {
           <AlertDialogActions
             destructive
             confirmLabel="Delete"
-            onConfirm={() => deleteId != null && deleteSubjectMutation.mutate(deleteId)}
-            loading={deleteSubjectMutation.isPending}
+            onConfirm={() => deleteId != null && deleteSubject(deleteId).finally(() => setDeleteId(null))}
+            loading={deletingSubject}
           />
         </AlertDialogPopup>
       </AlertDialog>

@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { getCachedCurrentSemester } from '@/lib/actions';
+import { getCurrentSemester } from '@/lib/academic/server/read-actions';
 import { DashboardShell } from '@/components/dashboard-shell';
 
 export default async function DashboardLayout({
@@ -15,7 +15,7 @@ export default async function DashboardLayout({
     redirect('/sign-in');
   }
 
-  const semester = await getCachedCurrentSemester(userId);
+  const semester = await getCurrentSemester();
 
   if (!semester) {
     redirect('/onboarding');

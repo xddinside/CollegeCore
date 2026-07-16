@@ -11,6 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "TZ=America/New_York node --test --import tsx \"src/lib/**/*.test.ts\" \"electron/**/*.test.ts\"",
     "electron:dev": "npm run build && npm --prefix electron run dev",
     "electron:build": "npm run build && npm --prefix electron run dist"
   },
@@ -40,6 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   },
   "ignoreScripts": [

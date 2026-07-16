@@ -10,31 +10,32 @@ import {
   DEFAULT_DESKTOP_SETTINGS,
   NOTIFICATION_INTERVAL_OPTIONS,
   clampNotificationInterval,
-  hasDesktopBridge,
+  getDesktopRuntime,
   type DesktopSettings,
 } from '@/lib/desktop';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export function DesktopSettingsPanel() {
-  const [isDesktop] = useState(() => hasDesktopBridge());
+  const [runtime] = useState(() => getDesktopRuntime());
+  const isDesktop = runtime.kind === 'electron';
   const [settings, setSettings] = useState<DesktopSettings>(DEFAULT_DESKTOP_SETTINGS);
   const [status, setStatus] = useState<SaveState>('idle');
 
   useEffect(() => {
-    if (!isDesktop || !window.collegeCoreDesktop) {
+    if (!isDesktop) {
       return;
     }
 
     let active = true;
 
-    void window.collegeCoreDesktop.getSettings().then((nextSettings) => {
+    void runtime.settings.readState().then((state) => {
       if (active) {
-        setSettings(nextSettings);
+        setSettings(state.settings);
       }
     });
 
-    const unsubscribe = window.collegeCoreDesktop.onSettingsChanged((nextSettings) => {
+    const unsubscribe = runtime.settings.onChanged((nextSettings) => {
       if (active) {
         setSettings(nextSettings);
       }
@@ -44,18 +45,18 @@ export function DesktopSettingsPanel() {
       active = false;
       unsubscribe();
     };
-  }, [isDesktop]);
+  }, [isDesktop, runtime]);
 
   async function updateSettings(nextSettings: Partial<DesktopSettings>) {
-    if (!window.collegeCoreDesktop) {
+    if (runtime.kind !== 'electron') {
       return;
     }
 
     setStatus('saving');
 
     try {
-      const savedSettings = await window.collegeCoreDesktop.updateSettings(nextSettings);
-      setSettings(savedSettings);
+      const state = await runtime.settings.apply({ type: 'change', changes: nextSettings });
+      setSettings(state.settings);
       setStatus('saved');
 
       window.setTimeout(() => {
@@ -68,7 +69,7 @@ export function DesktopSettingsPanel() {
   }
 
   async function handleDismiss() {
-    if (!window.collegeCoreDesktop) {
+    if (runtime.kind !== 'electron') {
       return;
     }
 
@@ -77,7 +78,7 @@ export function DesktopSettingsPanel() {
     }
 
     try {
-      await window.collegeCoreDesktop.dismissNotificationPrompt();
+      await runtime.settings.apply({ type: 'dismiss-notification-prompt' });
       setStatus('saved');
       window.setTimeout(() => {
         setStatus((current) => (current === 'saved' ? 'idle' : current));

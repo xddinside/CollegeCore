@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { URL } from 'node:url';
 import {
@@ -14,32 +14,20 @@ import {
   nativeImage,
 } from 'electron';
 import { loadEnvConfig } from '@next/env';
+import {
+  DEFAULT_DESKTOP_SETTINGS,
+  DESKTOP_REMINDERS_POLL_CHANNEL,
+  DESKTOP_REMINDERS_SUBMIT_CHANNEL,
+  DESKTOP_SETTINGS_APPLY_CHANNEL,
+  DESKTOP_SETTINGS_READ_STATE_CHANNEL,
+  isValidReminderRoute,
+  parseReminderMessages,
+  parseSettingsCommand,
+  type DesktopReminderMessage,
+  type DesktopSettings,
+} from './desktop-contract';
+import { DesktopSettingsStore } from './desktop-settings';
 import { startNextServer, type StartedNextServer } from './server';
-
-type DesktopSettings = {
-  notificationsEnabled: boolean;
-  minimizeToTray: boolean;
-  notificationCheckIntervalMinutes: number;
-  hasSeenNotificationPrompt: boolean;
-};
-
-type DesktopReminderCandidate = {
-  id: string;
-  title: string;
-  body: string;
-  route?: string;
-};
-
-type DesktopSettingsUpdate = Partial<
-  Pick<DesktopSettings, 'notificationsEnabled' | 'minimizeToTray' | 'notificationCheckIntervalMinutes'>
->;
-
-const DEFAULT_SETTINGS: DesktopSettings = {
-  notificationsEnabled: true,
-  minimizeToTray: false,
-  notificationCheckIntervalMinutes: 15,
-  hasSeenNotificationPrompt: false,
-};
 
 const NOTIFICATION_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 const DESKTOP_LAUNCH_ABORT = 'DESKTOP_LAUNCH_ABORT';
@@ -49,8 +37,8 @@ let tray: Tray | null = null;
 let localServer: StartedNextServer | null = null;
 let scheduler: NodeJS.Timeout | null = null;
 let isQuitting = false;
-let settings: DesktopSettings = { ...DEFAULT_SETTINGS };
 let appOrigin: string | null = null;
+let settingsStore: DesktopSettingsStore | null = null;
 
 const deliveredNotifications = new Map<string, number>();
 const guardedContents = new WeakSet<WebContents>();
@@ -78,55 +66,8 @@ function getClerkFrontendApi(publishableKey: string | undefined) {
   }
 }
 
-function getSettingsPath() {
-  return path.join(app.getPath('userData'), 'desktop-settings.json');
-}
-
-async function loadSettings() {
-  try {
-    const raw = await fs.readFile(getSettingsPath(), 'utf8');
-    settings = normalizeSettings(JSON.parse(raw));
-  } catch (error) {
-    settings = { ...DEFAULT_SETTINGS };
-
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.error('Could not read desktop settings:', error);
-    }
-  }
-}
-
-async function persistSettings() {
-  await fs.writeFile(getSettingsPath(), JSON.stringify(settings, null, 2));
-}
-
-function normalizeSettings(value: unknown): DesktopSettings {
-  const candidate = typeof value === 'object' && value !== null ? (value as Partial<DesktopSettings>) : {};
-
-  return {
-    notificationsEnabled:
-      typeof candidate.notificationsEnabled === 'boolean'
-        ? candidate.notificationsEnabled
-        : DEFAULT_SETTINGS.notificationsEnabled,
-    minimizeToTray:
-      typeof candidate.minimizeToTray === 'boolean'
-        ? candidate.minimizeToTray
-        : DEFAULT_SETTINGS.minimizeToTray,
-    notificationCheckIntervalMinutes: clampInterval(candidate.notificationCheckIntervalMinutes),
-    hasSeenNotificationPrompt:
-      typeof candidate.hasSeenNotificationPrompt === 'boolean'
-        ? candidate.hasSeenNotificationPrompt
-        : DEFAULT_SETTINGS.hasSeenNotificationPrompt,
-  };
-}
-
-function clampInterval(value: unknown) {
-  const numeric = typeof value === 'number' ? value : Number(value);
-
-  if (!Number.isFinite(numeric)) {
-    return DEFAULT_SETTINGS.notificationCheckIntervalMinutes;
-  }
-
-  return Math.min(60, Math.max(5, Math.round(numeric)));
+function getSettings(): DesktopSettings {
+  return settingsStore?.getState().settings ?? { ...DEFAULT_DESKTOP_SETTINGS };
 }
 
 async function createMainWindow() {
@@ -155,7 +96,7 @@ async function createMainWindow() {
   });
 
   mainWindow.on('minimize', () => {
-    if (!settings.minimizeToTray) {
+    if (!getSettings().minimizeToTray) {
       return;
     }
 
@@ -163,7 +104,7 @@ async function createMainWindow() {
   });
 
   mainWindow.on('close', (event) => {
-    if (isQuitting || !settings.minimizeToTray) {
+    if (isQuitting || !getSettings().minimizeToTray) {
       return;
     }
 
@@ -175,7 +116,7 @@ async function createMainWindow() {
   appOrigin = new URL(launchUrl).origin;
   await mainWindow.loadURL(launchUrl);
   mainWindow.webContents.once('did-finish-load', () => {
-    mainWindow?.webContents.send('desktop:poll-reminders');
+    mainWindow?.webContents.send(DESKTOP_REMINDERS_POLL_CHANNEL);
   });
 }
 
@@ -395,10 +336,6 @@ function openDesktopSettings() {
   void mainWindow?.webContents.executeJavaScript("window.location.assign('/dashboard/settings')");
 }
 
-function broadcastSettings() {
-  mainWindow?.webContents.send('desktop:settings-changed', settings);
-}
-
 function syncReminderScheduler() {
   if (scheduler) {
     clearInterval(scheduler);
@@ -410,12 +347,12 @@ function syncReminderScheduler() {
   }
 
   scheduler = setInterval(() => {
-    mainWindow?.webContents.send('desktop:poll-reminders');
-  }, settings.notificationCheckIntervalMinutes * 60 * 1000);
+    mainWindow?.webContents.send(DESKTOP_REMINDERS_POLL_CHANNEL);
+  }, getSettings().notificationCheckIntervalMinutes * 60 * 1000);
 }
 
-function handleReminderSubmission(reminders: DesktopReminderCandidate[]) {
-  if (!settings.notificationsEnabled || reminders.length === 0) {
+function handleReminderSubmission(reminders: DesktopReminderMessage[]) {
+  if (!getSettings().notificationsEnabled || reminders.length === 0) {
     return;
   }
 
@@ -437,7 +374,7 @@ function handleReminderSubmission(reminders: DesktopReminderCandidate[]) {
     notification.on('click', () => {
       showMainWindow();
 
-      if (reminder.route) {
+      if (reminder.route && isValidReminderRoute(reminder.route)) {
         void mainWindow?.webContents.executeJavaScript(
           `window.location.assign(${JSON.stringify(reminder.route)})`
         );
@@ -449,33 +386,26 @@ function handleReminderSubmission(reminders: DesktopReminderCandidate[]) {
 }
 
 function registerIpc() {
-  ipcMain.handle('desktop:get-settings', () => settings);
-  ipcMain.handle('desktop:get-launch-state', () => ({
-    settings,
-    shouldShowNotificationPrompt: !settings.hasSeenNotificationPrompt,
-  }));
-  ipcMain.handle('desktop:update-settings', async (_event, update: DesktopSettingsUpdate) => {
-    settings = normalizeSettings({
-      ...settings,
-      ...update,
-    });
-    await persistSettings();
-    broadcastSettings();
-    syncReminderScheduler();
-    return settings;
-  });
-  ipcMain.handle('desktop:dismiss-notification-prompt', async () => {
-    if (!settings.hasSeenNotificationPrompt) {
-      settings = {
-        ...settings,
-        hasSeenNotificationPrompt: true,
-      };
-      await persistSettings();
-      broadcastSettings();
+  ipcMain.handle(DESKTOP_SETTINGS_READ_STATE_CHANNEL, () => settingsStore?.getState());
+
+  ipcMain.handle(DESKTOP_SETTINGS_APPLY_CHANNEL, async (_event, command: unknown) => {
+    if (!settingsStore) {
+      throw new Error('Settings store is not initialized');
     }
+
+    const previousSettings = getSettings();
+    const parsedCommand = parseSettingsCommand(command);
+    const nextState = await settingsStore.apply(parsedCommand);
+
+    if (previousSettings.notificationCheckIntervalMinutes !== nextState.settings.notificationCheckIntervalMinutes) {
+      syncReminderScheduler();
+    }
+
+    return nextState;
   });
-  ipcMain.handle('desktop:submit-reminders', (_event, reminders: DesktopReminderCandidate[]) => {
-    handleReminderSubmission(Array.isArray(reminders) ? reminders : []);
+
+  ipcMain.handle(DESKTOP_REMINDERS_SUBMIT_CHANNEL, (_event, reminders: unknown) => {
+    handleReminderSubmission(parseReminderMessages(reminders));
   });
 }
 
@@ -489,7 +419,7 @@ async function shutdownLocalServer() {
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && !settings.minimizeToTray) {
+  if (process.platform !== 'darwin' && !getSettings().minimizeToTray) {
     app.quit();
   }
 });
@@ -514,7 +444,12 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 app.whenReady().then(async () => {
-  await loadSettings();
+  settingsStore = new DesktopSettingsStore({
+    userDataPath: app.getPath('userData'),
+    getMainWindow: () => mainWindow,
+  });
+
+  await settingsStore.load();
   registerIpc();
   syncTray();
   await createMainWindow();

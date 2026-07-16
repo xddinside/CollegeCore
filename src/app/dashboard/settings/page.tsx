@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
-import { getAssignmentStats, getCachedCurrentSemester, getSprintCount, getSubjectCount, getTodoStats } from '@/lib/actions';
+import { getCurrentSemester, getDashboardSettingsData } from '@/lib/academic/server/read-actions';
 import { DesktopSettingsPanel } from '@/components/desktop-settings-panel';
 import { Button } from '@/components/ui/button';
 
@@ -20,15 +20,11 @@ export default async function DashboardSettingsPage() {
   const { userId } = await auth();
   if (!userId) redirect('/sign-in');
 
-  const semester = await getCachedCurrentSemester(userId);
+  const semester = await getCurrentSemester();
   if (!semester) redirect('/onboarding');
 
-  const [subjectCount, assignmentStats, sprintCount, todoStats] = await Promise.all([
-    getSubjectCount(semester.id),
-    getAssignmentStats(semester.id),
-    getSprintCount(semester.id),
-    getTodoStats(semester.id),
-  ]);
+  const settingsData = await getDashboardSettingsData();
+  const { subjectCount, assignmentStats, sprintCount, todoStats } = settingsData;
 
   const pendingAssignments = assignmentStats.total - assignmentStats.completed;
   const completedTodos = todoStats.completed;

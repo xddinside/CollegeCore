@@ -1,34 +1,51 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import {
+  DESKTOP_REMINDERS_POLL_CHANNEL,
+  DESKTOP_REMINDERS_SUBMIT_CHANNEL,
+  DESKTOP_SETTINGS_APPLY_CHANNEL,
+  DESKTOP_SETTINGS_CHANGED_CHANNEL,
+  DESKTOP_SETTINGS_READ_STATE_CHANNEL,
+  type DesktopBridge,
+  type DesktopReminderMessage,
+  type DesktopSettingsChange,
+  type DesktopSettingsState,
+} from './desktop-contract';
 
 const desktopApi = {
   isDesktop: true,
-  getSettings: () => ipcRenderer.invoke('desktop:get-settings'),
-  updateSettings: (update: unknown) => ipcRenderer.invoke('desktop:update-settings', update),
-  getLaunchState: () => ipcRenderer.invoke('desktop:get-launch-state'),
-  dismissNotificationPrompt: () => ipcRenderer.invoke('desktop:dismiss-notification-prompt'),
-  submitReminders: (reminders: unknown) => ipcRenderer.invoke('desktop:submit-reminders', reminders),
-  onSettingsChanged: (callback: (settings: unknown) => void) => {
-    const listener = (...[, settings]: [IpcRendererEvent, unknown]) => {
+  readSettingsState: async () => {
+    const result = await ipcRenderer.invoke(DESKTOP_SETTINGS_READ_STATE_CHANNEL);
+    return result as DesktopSettingsState;
+  },
+  applySettings: async (command: DesktopSettingsChange) => {
+    const result = await ipcRenderer.invoke(DESKTOP_SETTINGS_APPLY_CHANNEL, command);
+    return result as DesktopSettingsState;
+  },
+  onSettingsChanged: (callback: (settings: DesktopSettingsState['settings']) => void) => {
+    const listener = (_event: IpcRendererEvent, settings: DesktopSettingsState['settings']) => {
       callback(settings);
     };
 
-    ipcRenderer.on('desktop:settings-changed', listener);
+    ipcRenderer.on(DESKTOP_SETTINGS_CHANGED_CHANNEL, listener);
 
     return () => {
-      ipcRenderer.removeListener('desktop:settings-changed', listener);
+      ipcRenderer.removeListener(DESKTOP_SETTINGS_CHANGED_CHANNEL, listener);
     };
+  },
+  submitReminders: async (reminders: DesktopReminderMessage[]) => {
+    await ipcRenderer.invoke(DESKTOP_REMINDERS_SUBMIT_CHANNEL, reminders);
   },
   onReminderPoll: (callback: () => void | Promise<void>) => {
     const listener = () => {
       void callback();
     };
 
-    ipcRenderer.on('desktop:poll-reminders', listener);
+    ipcRenderer.on(DESKTOP_REMINDERS_POLL_CHANNEL, listener);
 
     return () => {
-      ipcRenderer.removeListener('desktop:poll-reminders', listener);
+      ipcRenderer.removeListener(DESKTOP_REMINDERS_POLL_CHANNEL, listener);
     };
   },
-};
+} satisfies DesktopBridge;
 
 contextBridge.exposeInMainWorld('collegeCoreDesktop', desktopApi);

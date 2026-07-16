@@ -1,13 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, FileText, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
-import { createAssignment, deleteAssignment, updateAssignment, updateAssignmentStatus } from '@/lib/actions';
-import { getAssignmentsPageData, type AssignmentsPageData } from '@/lib/dashboard-queries';
-import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
-import { cn, formatRelativeDate, formatStatus } from '@/lib/utils';
+import { ASSIGNMENT_STATUSES, assignmentStatusLabel, nextAssignmentStatus } from '@/lib/assignment-lifecycle';
+import { describeDueDate } from '@/lib/academic-day';
+import { useAssignmentsDashboard } from '@/lib/dashboard/client-data';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogActions,
@@ -26,26 +24,19 @@ import { AssignmentRowSkeleton } from '@/components/dashboard/row-skeletons';
 import { StatusDot } from '@/components/dashboard/status-dot';
 import { NewShortcutKbd } from '@/components/dashboard/new-shortcut-kbd';
 
-const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'COMPLETED'] as const;
-type AssignmentStatus = (typeof STATUS_OPTIONS)[number];
-
-function getNextStatus(status: AssignmentStatus): AssignmentStatus {
-  if (status === 'TODO') return 'IN_PROGRESS';
-  if (status === 'IN_PROGRESS') return 'COMPLETED';
-  return 'TODO';
-}
-
-type CreateAssignmentInput = {
-  title: string;
-  description: string;
-  dueDate: string;
-  subjectId: number;
-  createMore: boolean;
-};
-
 export default function AssignmentsPage() {
-  const { user, isLoaded } = useUser();
-  const queryClient = useQueryClient();
+  const {
+    data,
+    loading,
+    error,
+    createAssignment,
+    creatingAssignment,
+    updateAssignmentStatus,
+    updatingAssignmentStatus,
+    updateAssignment,
+    deleteAssignment,
+    deletingAssignment,
+  } = useAssignmentsDashboard();
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [quickCaptureKey, setQuickCaptureKey] = useState(0);
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
@@ -54,91 +45,13 @@ export default function AssignmentsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
 
-  const assignmentsQueryKey = user ? dashboardQueryKeys.assignments(user.id) : ['dashboard', 'assignments', 'anonymous'];
-  const assignmentsQuery = useQuery({
-    queryKey: assignmentsQueryKey,
-    queryFn: () => getAssignmentsPageData(user!.id),
-    enabled: isLoaded && !!user,
-  });
-
   const openQuickCapture = useCallback(() => {
     setQuickCaptureKey((key) => key + 1);
     setQuickCaptureOpen(true);
   }, []);
 
-  const createAssignmentMutation = useMutation({
-    mutationFn: (variables: CreateAssignmentInput) =>
-      createAssignment(variables.subjectId, variables.title, variables.description.trim() || null, variables.dueDate ? new Date(variables.dueDate) : null),
-    onSuccess: (_data, variables) => {
-      if (!variables.createMore) {
-        setQuickCaptureOpen(false);
-      }
-      void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
-    },
-  });
-
-  const updateAssignmentStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: AssignmentStatus }) => updateAssignmentStatus(id, status),
-    onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, assignments: current.assignments.map((a) => (a.id === id ? { ...a, status } : a)) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
-    },
-  });
-
-  const updateAssignmentDescriptionMutation = useMutation({
-    mutationFn: ({ id, title, description, dueDate }: { id: number; title: string; description: string | null; dueDate: Date | string | null }) =>
-      updateAssignment(id, title, description, dueDate ? new Date(dueDate) : null),
-    onMutate: async ({ id, description }) => {
-      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, assignments: current.assignments.map((a) => (a.id === id ? { ...a, description } : a)) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
-    },
-  });
-
-  const deleteAssignmentMutation = useMutation({
-    mutationFn: (id: number) => deleteAssignment(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: assignmentsQueryKey });
-      const previousData = queryClient.getQueryData<AssignmentsPageData>(assignmentsQueryKey);
-      queryClient.setQueryData<AssignmentsPageData>(assignmentsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, assignments: current.assignments.filter((a) => a.id !== id) };
-      });
-      if (detailId === id) setDetailId(null);
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(assignmentsQueryKey, context.previousData);
-    },
-    onSettled: () => {
-      setDeleteId(null);
-      void queryClient.invalidateQueries({ queryKey: assignmentsQueryKey });
-    },
-  });
-
-  const assignments = assignmentsQuery.data?.assignments ?? [];
-  const subjects = assignmentsQuery.data?.subjects ?? [];
+  const assignments = data?.assignments ?? [];
+  const subjects = data?.subjects ?? [];
 
   const filteredAssignments = assignments.filter((assignment) => {
     if (subjectFilter !== 'all' && assignment.subjectId !== Number(subjectFilter)) return false;
@@ -180,7 +93,7 @@ export default function AssignmentsPage() {
     };
   }, [openQuickCapture]);
 
-  if (!isLoaded || assignmentsQuery.isLoading) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-end justify-between">
@@ -199,7 +112,7 @@ export default function AssignmentsPage() {
     );
   }
 
-  if (assignmentsQuery.isError) {
+  if (error) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
         <p className="text-sm font-medium text-destructive">Unable to load assignments</p>
@@ -238,8 +151,8 @@ export default function AssignmentsPage() {
           </Select>
           <Select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-8 text-sm">
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s} value={s}>{formatStatus(s)}</SelectItem>
+            {ASSIGNMENT_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>{assignmentStatusLabel(s)}</SelectItem>
             ))}
           </Select>
         </div>
@@ -263,7 +176,7 @@ export default function AssignmentsPage() {
         <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
           {filteredAssignments.map((assignment, index) => {
             const isCompleted = assignment.status === 'COMPLETED';
-            const due = formatRelativeDate(assignment.dueDate);
+            const due = describeDueDate(assignment.dueDate, new Date());
             const delay = Math.min(index, 8) * 30;
             return (
               <div
@@ -284,14 +197,14 @@ export default function AssignmentsPage() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    updateAssignmentStatusMutation.mutate({ id: assignment.id, status: getNextStatus(assignment.status) });
+                    updateAssignmentStatus({ id: assignment.id, status: nextAssignmentStatus(assignment.status) });
                   }}
-                  disabled={assignment.isPending}
+                  disabled={assignment.isPending || updatingAssignmentStatus}
                   className={cn(
                     'rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card'
                   )}
                   aria-label={`Change status for ${assignment.title}`}
-                  title={`Status: ${formatStatus(assignment.status)}`}
+                  title={`Status: ${assignmentStatusLabel(assignment.status)}`}
                 >
                   <StatusDot status={assignment.status} interactive />
                 </button>
@@ -347,13 +260,13 @@ export default function AssignmentsPage() {
                     <div className="px-2 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
                       Set status
                     </div>
-                    {STATUS_OPTIONS.map((s) => (
+                    {ASSIGNMENT_STATUSES.map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          updateAssignmentStatusMutation.mutate({ id: assignment.id, status: s });
+                          updateAssignmentStatus({ id: assignment.id, status: s });
                         }}
                         className={cn(
                           'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-accent',
@@ -361,17 +274,17 @@ export default function AssignmentsPage() {
                         )}
                       >
                         <StatusDot status={s} size="sm" />
-                        {formatStatus(s)}
+                        {assignmentStatusLabel(s)}
                         {assignment.status === s && <Check className="ml-auto h-3.5 w-3.5 text-muted-foreground" />}
                       </button>
                     ))}
                     <div className="my-1 h-px bg-border" />
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(assignment.id);
-                      }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(assignment.id);
+                        }}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -390,11 +303,11 @@ export default function AssignmentsPage() {
         open={detailId != null}
         onOpenChange={(open) => !open && setDetailId(null)}
         onStatusChange={(status) => {
-          if (detailAssignment) updateAssignmentStatusMutation.mutate({ id: detailAssignment.id, status });
+          if (detailAssignment) updateAssignmentStatus({ id: detailAssignment.id, status });
         }}
         onDescriptionChange={(description) => {
           if (detailAssignment) {
-            updateAssignmentDescriptionMutation.mutate({
+            updateAssignment({
               id: detailAssignment.id,
               title: detailAssignment.title,
               description,
@@ -414,17 +327,19 @@ export default function AssignmentsPage() {
         open={quickCaptureOpen}
         onOpenChange={setQuickCaptureOpen}
         subjects={subjects}
-        onSave={(input) => {
+        onSave={async (input) => {
           if (input.subjectId == null) return;
-          createAssignmentMutation.mutate({
+          await createAssignment({
             title: input.title,
             description: '',
             dueDate: input.dueDate,
             subjectId: input.subjectId,
-            createMore: input.createMore,
           });
+          if (!input.createMore) {
+            setQuickCaptureOpen(false);
+          }
         }}
-        saving={createAssignmentMutation.isPending}
+        saving={creatingAssignment}
       />
 
       <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>
@@ -434,8 +349,14 @@ export default function AssignmentsPage() {
           <AlertDialogActions
             destructive
             confirmLabel="Delete"
-            onConfirm={() => deleteId != null && deleteAssignmentMutation.mutate(deleteId)}
-            loading={deleteAssignmentMutation.isPending}
+            onConfirm={() =>
+              deleteId != null &&
+              deleteAssignment(deleteId).finally(() => {
+                setDeleteId(null);
+                if (detailId === deleteId) setDetailId(null);
+              })
+            }
+            loading={deletingAssignment}
           />
         </AlertDialogPopup>
       </AlertDialog>

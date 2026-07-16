@@ -3,15 +3,17 @@
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { Check, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Assignment } from '@/lib/dashboard-queries';
-import { cn, formatRelativeDate, formatStatus } from '@/lib/utils';
+import { ASSIGNMENT_STATUSES, assignmentStatusLabel } from '@/lib/assignment-lifecycle';
+import { describeDueDate } from '@/lib/academic-day';
+import type { Assignment } from '@/lib/dashboard/types';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverPopup, PopoverTrigger } from '@/components/ui/popover';
 import { StatusDot } from '@/components/dashboard/status-dot';
 import { Textarea } from '@/components/ui/textarea';
 
-const STATUS_OPTIONS: Assignment['status'][] = ['TODO', 'IN_PROGRESS', 'COMPLETED'];
+
 
 type AssignmentDetailDrawerProps = {
   open: boolean;
@@ -41,9 +43,9 @@ export function AssignmentDetailDrawer({
   }, [editingDescription]);
 
   if (!assignment) return null;
-  const due = formatRelativeDate(assignment.dueDate);
+  const due = describeDueDate(assignment.dueDate, new Date());
   const isCompleted = assignment.status === 'COMPLETED';
-  const nextStatus = STATUS_OPTIONS[(STATUS_OPTIONS.indexOf(assignment.status) + 1) % STATUS_OPTIONS.length];
+  const nextStatus = ASSIGNMENT_STATUSES[(ASSIGNMENT_STATUSES.indexOf(assignment.status) + 1) % ASSIGNMENT_STATUSES.length];
 
   function saveDescription() {
     const next = descriptionDraft.trim() || null;
@@ -82,7 +84,7 @@ export function AssignmentDetailDrawer({
                 type="button"
                 onClick={() => onStatusChange(nextStatus)}
                 className="mt-0.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
-                aria-label={`Change status from ${formatStatus(assignment.status)} to ${formatStatus(nextStatus)}`}
+                aria-label={`Change status from ${assignmentStatusLabel(assignment.status)} to ${assignmentStatusLabel(nextStatus)}`}
               >
                 <StatusDot status={assignment.status} size="lg" interactive />
               </button>
@@ -109,7 +111,7 @@ export function AssignmentDetailDrawer({
                     }
                   >
                     <StatusDot status={assignment.status} size="sm" />
-                    {formatStatus(assignment.status)}
+                    {assignmentStatusLabel(assignment.status)}
                   </PopoverTrigger>
                   <PopoverPopup
                     align="start"
@@ -117,7 +119,7 @@ export function AssignmentDetailDrawer({
                     className="w-44"
                     viewportClassName="p-1 py-1 [--viewport-inline-padding:--spacing(0.5)]"
                   >
-                    {STATUS_OPTIONS.map((s) => (
+                    {ASSIGNMENT_STATUSES.map((s) => (
                       <button
                         key={s}
                         type="button"
@@ -128,7 +130,7 @@ export function AssignmentDetailDrawer({
                         )}
                       >
                         <StatusDot status={s} size="sm" />
-                        {formatStatus(s)}
+                        {assignmentStatusLabel(s)}
                         {assignment.status === s && <Check className="ml-auto h-3.5 w-3.5 text-muted-foreground" />}
                       </button>
                     ))}

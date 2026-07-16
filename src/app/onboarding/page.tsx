@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Plus, X } from 'lucide-react';
-import { createSemester, createSubject } from '@/lib/actions';
+import { startSemester } from '@/lib/academic/server/mutation-actions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,10 +76,10 @@ export default function OnboardingPage() {
         console.error('Failed to update Clerk profile during onboarding', profileError);
       }
 
-      const createdSemester = await createSemester(user.id, semester);
-      await Promise.all(
-        subjects.map((s) => createSubject(createdSemester.id, s.name, s.color))
-      );
+      await startSemester({
+        name: semester,
+        subjects: subjects.map((s) => ({ name: s.name, color: s.color })),
+      });
 
       router.push('/dashboard');
     } catch (err) {

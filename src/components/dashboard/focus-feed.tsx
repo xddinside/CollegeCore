@@ -19,11 +19,10 @@ type FocusFeedProps = {
   groups: FocusGroup[];
   items: FocusItem[];
   today: Date;
-  semesterId: number;
   subjects: Subject[];
 };
 
-export function FocusFeed({ groups, items, today, semesterId, subjects }: FocusFeedProps) {
+export function FocusFeed({ groups, items, today, subjects }: FocusFeedProps) {
   return (
     <div className="mt-7">
       <div className="mb-3.5 flex items-center justify-between">
@@ -54,7 +53,7 @@ export function FocusFeed({ groups, items, today, semesterId, subjects }: FocusF
             <EmptyDescription>Capture an assignment, todo, or sprint to start shaping your week.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <DashboardCreateModal semesterId={semesterId} subjects={subjects} />
+            <DashboardCreateModal subjects={subjects} />
           </EmptyContent>
         </Empty>
       ) : (
