@@ -1,9 +1,8 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import { cn, formatStatus } from '@/lib/utils';
-
-export type AssignmentStatus = 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+import { assignmentStatusLabel, type AssignmentStatus } from '@/lib/assignment-lifecycle';
+import { cn } from '@/lib/utils';
 
 type StatusDotProps = {
   status: AssignmentStatus;
@@ -42,7 +41,7 @@ export function StatusDot({
         className
       )}
       aria-hidden="true"
-      title={formatStatus(status)}
+      title={assignmentStatusLabel(status)}
     >
       {status === 'IN_PROGRESS' && (
         <span className={cn('rounded-full bg-current', size === 'lg' ? 'h-2 w-2' : size === 'md' ? 'h-1.5 w-1.5' : 'h-1 w-1')} />

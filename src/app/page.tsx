@@ -1,13 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { getCachedCurrentSemester } from '@/lib/actions';
+import { getCurrentSemester } from '@/lib/academic/server/read-actions';
 import { AnimatedHomeContent } from '@/components/animated-home-content';
 
 export default async function HomePage() {
   const { userId } = await auth();
 
   if (userId) {
-    const semester = await getCachedCurrentSemester(userId);
+    const semester = await getCurrentSemester();
 
     if (semester) {
       redirect('/dashboard');

@@ -1,16 +1,8 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import {
-  getActiveSprintsPreview,
-  getAssignmentStats,
-  getCachedCurrentSemester,
-  getRecentTodosPreview,
-  getSemesterSubjects,
-  getSubjectCount,
-  getUpcomingAssignmentsPreview,
-} from '@/lib/actions';
-import { getDueStatus } from '@/lib/utils';
-import { buildFocusFeed, startOfDay } from '@/lib/dashboard/focus-feed';
+import { getCurrentSemester, getDashboardHomeData } from '@/lib/academic/server/read-actions';
+import { describeDueDate, toAcademicDay } from '@/lib/academic-day';
+import { buildFocusFeed } from '@/lib/dashboard/focus-feed';
 import { DashboardGreeting } from '@/components/dashboard-greeting';
 import { DesktopNotificationPrompt } from '@/components/desktop-notification-prompt';
 import { DashboardCreateModal } from '@/components/dashboard/dashboard-create-modal';
@@ -25,26 +17,28 @@ export default async function DashboardPage() {
     redirect('/sign-in');
   }
 
-  const userPromise = currentUser();
-
-  const semester = await getCachedCurrentSemester(userId);
+  const semester = await getCurrentSemester();
 
   if (!semester) {
     redirect('/onboarding');
   }
 
-  const [user, subjects, subjectCount, stats, pendingAssignments, sprints, todos] = await Promise.all([
-    userPromise,
-    getSemesterSubjects(semester.id),
-    getSubjectCount(semester.id),
-    getAssignmentStats(semester.id),
-    getUpcomingAssignmentsPreview(semester.id, 8),
-    getActiveSprintsPreview(semester.id, 4),
-    getRecentTodosPreview(semester.id, 12),
+  const [user, homeData] = await Promise.all([
+    currentUser(),
+    getDashboardHomeData(),
   ]);
   const displayName = user?.firstName || user?.fullName || null;
 
-  const today = startOfDay(new Date());
+  const {
+    subjects,
+    subjectCount,
+    assignmentStats: stats,
+    upcomingAssignments: pendingAssignments,
+    activeSprints: sprints,
+    recentTodos: todos,
+  } = homeData;
+
+  const today = toAcademicDay(new Date());
 
   const { items: focusItems, groups } = buildFocusFeed({
     assignments: pendingAssignments,
@@ -53,7 +47,7 @@ export default async function DashboardPage() {
     today,
   });
 
-  const overdueCount = pendingAssignments.filter((a) => getDueStatus(a.dueDate) === 'overdue').length;
+  const overdueCount = pendingAssignments.filter((a) => describeDueDate(a.dueDate, today).status === 'overdue').length;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -83,13 +77,13 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
-          <DashboardCreateModal semesterId={semester.id} subjects={subjects} />
+          <DashboardCreateModal subjects={subjects} />
         </div>
       </section>
 
       <DesktopNotificationPrompt />
 
-      <FocusFeed groups={groups} items={focusItems} today={today} semesterId={semester.id} subjects={subjects} />
+      <FocusFeed groups={groups} items={focusItems} today={today} subjects={subjects} />
     </div>
   );
 }

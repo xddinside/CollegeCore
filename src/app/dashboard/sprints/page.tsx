@@ -2,12 +2,9 @@
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { useEffect, useMemo, useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, MoreHorizontal, Plus, Trash2, X } from 'lucide-react';
-import { createExamSprint, createSprintSession, deleteExamSprint, deleteSprintSession } from '@/lib/actions';
-import { getSprintsPageData, type SprintsPageData } from '@/lib/dashboard-queries';
-import { dashboardQueryKeys } from '@/lib/dashboard-query-keys';
+import { academicDayOffset, formatAcademicDate, toAcademicDay } from '@/lib/academic-day';
+import { useSprintsDashboard } from '@/lib/dashboard/client-data';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,34 +25,15 @@ import { TimePicker } from '@/components/ui/time-picker';
 import { NewShortcutKbd } from '@/components/dashboard/new-shortcut-kbd';
 import { SprintRowSkeleton } from '@/components/dashboard/row-skeletons';
 
-type CreateSprintInput = {
-  name: string;
-  startDate: string;
-  endDate: string;
-};
-
-type CreateSessionInput = {
-  sprintId: number;
-  date: string;
-  startTime: string;
-  endTime: string;
-  subjectId: number;
-  notes: string;
-};
-
 function formatDateRange(start: Date | string, end: Date | string) {
-  return `${new Date(start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  return `${formatAcademicDate(start, 'short-date')} - ${formatAcademicDate(end, 'short-date')}`;
 }
 
-function getSprintStatus(startDate: Date | string, endDate: Date | string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(0, 0, 0, 0);
-  if (today < start) return 'upcoming';
-  if (today > end) return 'completed';
+function getSprintStatus(startDate: Date | string, endDate: Date | string, today: Date) {
+  const startOffset = academicDayOffset(startDate, today);
+  const endOffset = academicDayOffset(endDate, today);
+  if (startOffset > 0) return 'upcoming';
+  if (endOffset < 0) return 'completed';
   return 'active';
 }
 
@@ -70,14 +48,26 @@ function formatTime(value: string) {
 }
 
 function sessionSortTime(session: { date: Date | string; startTime: string }) {
-  const d = new Date(session.date);
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return new Date(`${dateStr}T${session.startTime}`).getTime();
+  const day = toAcademicDay(session.date);
+  const [hours, minutes] = session.startTime.split(':').map(Number);
+  day.setHours(hours, minutes, 0, 0);
+  return day.getTime();
 }
 
 export default function SprintsPage() {
-  const { user, isLoaded } = useUser();
-  const queryClient = useQueryClient();
+  const {
+    data,
+    loading,
+    error,
+    createSprint,
+    creatingSprint,
+    createSession,
+    creatingSession,
+    deleteSession,
+    deletingSession,
+    deleteSprint,
+    deletingSprint,
+  } = useSprintsDashboard();
   const [sprintModalOpen, setSprintModalOpen] = useState(false);
   const [showSessionForm, setShowSessionForm] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
@@ -93,23 +83,18 @@ export default function SprintsPage() {
   const [deleteSprintId, setDeleteSprintId] = useState<number | null>(null);
   const [deleteSessionId, setDeleteSessionId] = useState<number | null>(null);
   const [collapsedSprintIds, setCollapsedSprintIds] = useState<Set<number>>(new Set());
+  const [expandedCompletedSprintIds, setExpandedCompletedSprintIds] = useState<Set<number>>(new Set());
 
-  const sprintsQueryKey = user ? dashboardQueryKeys.sprints(user.id) : ['dashboard', 'sprints', 'anonymous'];
-  const sprintsQuery = useQuery({
-    queryKey: sprintsQueryKey,
-    queryFn: () => getSprintsPageData(user!.id),
-    enabled: isLoaded && !!user,
-  });
+  const today = useMemo(() => new Date(), []);
 
-  useEffect(() => {
-    if (!sprintsQuery.data) return;
-    const completed = sprintsQuery.data.sprints.filter((sprint) => getSprintStatus(sprint.startDate, sprint.endDate) === 'completed').map((sprint) => sprint.id);
-    setCollapsedSprintIds((current) => {
-      const next = new Set(current);
-      for (const id of completed) next.add(id);
-      return next;
-    });
-  }, [sprintsQuery.data]);
+  const completedSprintIds = useMemo(
+    () => new Set(
+      (data?.sprints ?? [])
+        .filter((sprint) => getSprintStatus(sprint.startDate, sprint.endDate, today) === 'completed')
+        .map((sprint) => sprint.id),
+    ),
+    [data?.sprints, today],
+  );
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -126,130 +111,9 @@ export default function SprintsPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const createSprintMutation = useMutation({
-    mutationFn: async (variables: CreateSprintInput) => {
-      if (!sprintsQuery.data) throw new Error('Sprints data not loaded');
-      return createExamSprint(sprintsQuery.data.semesterId, variables.name, new Date(variables.startDate), new Date(variables.endDate));
-    },
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: sprintsQueryKey });
-      const previousData = queryClient.getQueryData<SprintsPageData>(sprintsQueryKey);
-      const tempId = -Date.now();
-      setNewName('');
-      setNewStartDate('');
-      setNewEndDate('');
-      setSprintModalOpen(false);
-      setAttemptedSprintSave(false);
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, sprints: [{ id: tempId, name: variables.name, startDate: variables.startDate, endDate: variables.endDate, isPending: true }, ...current.sprints], sessions: { ...current.sessions, [tempId]: [] } };
-      });
-      return { previousData, tempId, variables };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(sprintsQueryKey, context.previousData);
-      if (context?.variables) {
-        setNewName(context.variables.name);
-        setNewStartDate(context.variables.startDate);
-        setNewEndDate(context.variables.endDate);
-        setSprintModalOpen(true);
-      }
-    },
-    onSuccess: (createdSprint, _variables, context) => {
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current || !context) return current;
-        const { [context.tempId]: tempSessions = [], ...remainingSessions } = current.sessions;
-        return { ...current, sprints: current.sprints.map((sprint) => (sprint.id === context.tempId ? { ...sprint, id: createdSprint.id, isPending: false } : sprint)), sessions: { ...remainingSessions, [createdSprint.id]: tempSessions } };
-      });
-      void queryClient.invalidateQueries({ queryKey: sprintsQueryKey });
-    },
-  });
-
-  const createSessionMutation = useMutation({
-    mutationFn: (variables: CreateSessionInput) => createSprintSession(variables.sprintId, new Date(variables.date), variables.startTime, variables.endTime, variables.subjectId, variables.notes.trim() || null),
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: sprintsQueryKey });
-      const previousData = queryClient.getQueryData<SprintsPageData>(sprintsQueryKey);
-      const tempId = -Date.now();
-      const subject = previousData?.subjects.find((item) => item.id === variables.subjectId);
-      setNewDate('');
-      setNewStartTime('09:00');
-      setNewEndTime('10:00');
-      setNewSubjectId(null);
-      setNewNotes('');
-      setShowSessionForm(null);
-      setAttemptedSessionSave(false);
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current || !subject) return current;
-        return { ...current, sessions: { ...current.sessions, [variables.sprintId]: [{ id: tempId, date: variables.date, startTime: variables.startTime, endTime: variables.endTime, notes: variables.notes.trim() || null, subjectName: subject.name, subjectColor: subject.color, isPending: true }, ...(current.sessions[variables.sprintId] ?? [])] } };
-      });
-      return { previousData, tempId, variables };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(sprintsQueryKey, context.previousData);
-      if (context?.variables) {
-        setNewDate(context.variables.date);
-        setNewStartTime(context.variables.startTime);
-        setNewEndTime(context.variables.endTime);
-        setNewSubjectId(context.variables.subjectId);
-        setNewNotes(context.variables.notes);
-        setShowSessionForm(context.variables.sprintId);
-      }
-    },
-    onSuccess: (createdSession, _variables, context) => {
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current || !context) return current;
-        return { ...current, sessions: { ...current.sessions, [context.variables.sprintId]: (current.sessions[context.variables.sprintId] ?? []).map((session) => (session.id === context.tempId ? { ...session, id: createdSession.id, isPending: false } : session)) } };
-      });
-      void queryClient.invalidateQueries({ queryKey: sprintsQueryKey });
-    },
-  });
-
-  const deleteSessionMutation = useMutation({
-    mutationFn: (id: number) => deleteSprintSession(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: sprintsQueryKey });
-      const previousData = queryClient.getQueryData<SprintsPageData>(sprintsQueryKey);
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current) return current;
-        return { ...current, sessions: Object.fromEntries(Object.entries(current.sessions).map(([sprintId, sprintSessions]) => [Number(sprintId), sprintSessions.filter((session) => session.id !== id)])) };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(sprintsQueryKey, context.previousData);
-    },
-    onSettled: () => {
-      setDeleteSessionId(null);
-      void queryClient.invalidateQueries({ queryKey: sprintsQueryKey });
-    },
-  });
-
-  const deleteSprintMutation = useMutation({
-    mutationFn: (id: number) => deleteExamSprint(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: sprintsQueryKey });
-      const previousData = queryClient.getQueryData<SprintsPageData>(sprintsQueryKey);
-      queryClient.setQueryData<SprintsPageData>(sprintsQueryKey, (current) => {
-        if (!current) return current;
-        const remainingSessions = { ...current.sessions };
-        delete remainingSessions[id];
-        return { ...current, sprints: current.sprints.filter((sprint) => sprint.id !== id), sessions: remainingSessions };
-      });
-      return { previousData };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousData) queryClient.setQueryData(sprintsQueryKey, context.previousData);
-    },
-    onSettled: () => {
-      setDeleteSprintId(null);
-      void queryClient.invalidateQueries({ queryKey: sprintsQueryKey });
-    },
-  });
-
-  const sprints = useMemo(() => sprintsQuery.data?.sprints ?? [], [sprintsQuery.data?.sprints]);
-  const sessions = useMemo(() => sprintsQuery.data?.sessions ?? {}, [sprintsQuery.data?.sessions]);
-  const subjects = useMemo(() => sprintsQuery.data?.subjects ?? [], [sprintsQuery.data?.subjects]);
+  const sprints = useMemo(() => data?.sprints ?? [], [data?.sprints]);
+  const sessions = useMemo(() => data?.sessions ?? {}, [data?.sessions]);
+  const subjects = useMemo(() => data?.subjects ?? [], [data?.subjects]);
 
   const upcomingSessions = useMemo(() => {
     return sprints
@@ -260,19 +124,65 @@ export default function SprintsPage() {
 
   const sprintToDelete = sprints.find((sprint) => sprint.id === deleteSprintId);
 
-  function handleSaveSprint() {
+  async function handleSaveSprint() {
     setAttemptedSprintSave(true);
     if (!newName.trim() || !newStartDate || !newEndDate) return;
-    createSprintMutation.mutate({ name: newName.trim(), startDate: newStartDate, endDate: newEndDate });
+    const snapshot = { name: newName.trim(), startDate: newStartDate, endDate: newEndDate };
+    setNewName('');
+    setNewStartDate('');
+    setNewEndDate('');
+    setSprintModalOpen(false);
+    setAttemptedSprintSave(false);
+    try {
+      await createSprint(snapshot);
+    } catch {
+      setNewName(snapshot.name);
+      setNewStartDate(snapshot.startDate);
+      setNewEndDate(snapshot.endDate);
+      setSprintModalOpen(true);
+    }
   }
 
-  function handleSaveSession(sprintId: number) {
+  async function handleSaveSession(sprintId: number) {
     setAttemptedSessionSave(true);
     if (!newDate || !newStartTime || !newEndTime || !newSubjectId) return;
-    createSessionMutation.mutate({ sprintId, date: newDate, startTime: newStartTime, endTime: newEndTime, subjectId: newSubjectId, notes: newNotes });
+    const snapshot = {
+      sprintId,
+      date: newDate,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      subjectId: newSubjectId,
+      notes: newNotes,
+    };
+    setNewDate('');
+    setNewStartTime('09:00');
+    setNewEndTime('10:00');
+    setNewSubjectId(null);
+    setNewNotes('');
+    setShowSessionForm(null);
+    setAttemptedSessionSave(false);
+    try {
+      await createSession(snapshot);
+    } catch {
+      setNewDate(snapshot.date);
+      setNewStartTime(snapshot.startTime);
+      setNewEndTime(snapshot.endTime);
+      setNewSubjectId(snapshot.subjectId);
+      setNewNotes(snapshot.notes);
+      setShowSessionForm(snapshot.sprintId);
+    }
   }
 
   function toggleCollapsed(sprintId: number) {
+    if (completedSprintIds.has(sprintId)) {
+      setExpandedCompletedSprintIds((current) => {
+        const next = new Set(current);
+        if (next.has(sprintId)) next.delete(sprintId);
+        else next.add(sprintId);
+        return next;
+      });
+      return;
+    }
     setCollapsedSprintIds((current) => {
       const next = new Set(current);
       if (next.has(sprintId)) next.delete(sprintId);
@@ -281,7 +191,7 @@ export default function SprintsPage() {
     });
   }
 
-  if (!isLoaded || sprintsQuery.isLoading) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-end justify-between">
@@ -300,7 +210,7 @@ export default function SprintsPage() {
     );
   }
 
-  if (sprintsQuery.isError) {
+  if (error) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
         <p className="text-sm font-medium text-destructive">Unable to load sprints</p>
@@ -331,9 +241,11 @@ export default function SprintsPage() {
           ) : (
             <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
               {sprints.map((sprint) => {
-                const status = getSprintStatus(sprint.startDate, sprint.endDate);
+                const status = getSprintStatus(sprint.startDate, sprint.endDate, today);
                 const sprintSessions = sessions[sprint.id] ?? [];
-                const isCollapsed = collapsedSprintIds.has(sprint.id);
+                const isCollapsed = completedSprintIds.has(sprint.id)
+                  ? !expandedCompletedSprintIds.has(sprint.id)
+                  : collapsedSprintIds.has(sprint.id);
                 return (
                   <div key={sprint.id} className="group">
                     <div className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
@@ -352,7 +264,7 @@ export default function SprintsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setShowSessionForm((current) => (current === sprint.id ? null : sprint.id))}
-                          disabled={sprint.isPending}
+                          disabled={sprint.isPending || creatingSprint}
                           data-pressed={showSessionForm === sprint.id ? '' : undefined}
                           className="min-w-28"
                         >
@@ -366,7 +278,7 @@ export default function SprintsPage() {
                                 size="icon-xs"
                                 aria-label={`Open actions for ${sprint.name}`}
                                 className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                                disabled={sprint.isPending}
+                                disabled={sprint.isPending || creatingSprint}
                               />
                             }
                           >
@@ -425,7 +337,7 @@ export default function SprintsPage() {
                             {attemptedSessionSave && (!newDate || !newStartTime || !newEndTime) && <p className="text-xs text-destructive">Please fill in date and time.</p>}
                             <div className="flex justify-end gap-2">
                               <Button variant="ghost" onClick={() => { setShowSessionForm(null); setAttemptedSessionSave(false); }} size="sm">Cancel</Button>
-                              <Button onClick={() => handleSaveSession(sprint.id)} loading={createSessionMutation.isPending} size="sm">Save session</Button>
+                              <Button onClick={() => handleSaveSession(sprint.id)} loading={creatingSession} size="sm">Save session</Button>
                             </div>
                           </div>
                         )}
@@ -439,13 +351,13 @@ export default function SprintsPage() {
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm">{session.subjectName}</p>
                                   <p className="text-xs text-muted-foreground/80">
-                                    {new Date(session.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {formatTime(session.startTime)} – {formatTime(session.endTime)}
+                                    {formatAcademicDate(session.date, 'short-date')} · {formatTime(session.startTime)} – {formatTime(session.endTime)}
                                   </p>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => setDeleteSessionId(session.id)}
-                                  disabled={session.isPending}
+                                  disabled={session.isPending || deletingSession}
                                   className="rounded-md p-1 text-muted-foreground opacity-0 transition-[opacity,background-color,color] duration-150 ease-[var(--ease-out)] hover:bg-accent hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                                   aria-label={`Delete ${session.subjectName} session`}
                                 >
@@ -471,16 +383,11 @@ export default function SprintsPage() {
           ) : (
             <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
               {upcomingSessions.map((session) => {
-                const sessionDate = new Date(session.date);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const compare = new Date(sessionDate);
-                compare.setHours(0, 0, 0, 0);
-                let dateLabel = sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                if (compare.getTime() === today.getTime()) dateLabel = 'Today';
-                if (compare.getTime() === tomorrow.getTime()) dateLabel = 'Tomorrow';
+                const offset = academicDayOffset(session.date, today);
+                let dateLabel: string;
+                if (offset === 0) dateLabel = 'Today';
+                else if (offset === 1) dateLabel = 'Tomorrow';
+                else dateLabel = formatAcademicDate(session.date, 'short-date');
                 return (
                   <div key={session.id} className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
                     <div className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: session.subjectColor }} />
@@ -554,7 +461,7 @@ export default function SprintsPage() {
                 <DialogPrimitive.Close render={<Button type="button" variant="ghost" size="sm" />}>
                   Cancel
                 </DialogPrimitive.Close>
-                <Button type="submit" loading={createSprintMutation.isPending} size="sm">
+                <Button type="submit" loading={creatingSprint} size="sm">
                   <Plus className="h-3.5 w-3.5" />
                   Save sprint
                 </Button>
@@ -571,8 +478,8 @@ export default function SprintsPage() {
           <AlertDialogActions
             destructive
             confirmLabel="Delete"
-            onConfirm={() => deleteSprintId != null && deleteSprintMutation.mutate(deleteSprintId)}
-            loading={deleteSprintMutation.isPending}
+            onConfirm={() => deleteSprintId != null && deleteSprint(deleteSprintId).finally(() => setDeleteSprintId(null))}
+            loading={deletingSprint}
           />
         </AlertDialogPopup>
       </AlertDialog>
@@ -584,8 +491,8 @@ export default function SprintsPage() {
           <AlertDialogActions
             destructive
             confirmLabel="Delete"
-            onConfirm={() => deleteSessionId != null && deleteSessionMutation.mutate(deleteSessionId)}
-            loading={deleteSessionMutation.isPending}
+            onConfirm={() => deleteSessionId != null && deleteSession(deleteSessionId).finally(() => setDeleteSessionId(null))}
+            loading={deletingSession}
           />
         </AlertDialogPopup>
       </AlertDialog>

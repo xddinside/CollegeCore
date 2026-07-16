@@ -4,7 +4,7 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Calendar, CheckSquare, ListTodo, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { createAssignment, createExamSprint, createSubject, createTodo } from '@/lib/actions';
+import { useDashboardCreateItem } from '@/lib/dashboard/client-data';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -29,19 +29,18 @@ const CREATE_OPTIONS: Array<{
 ];
 
 type DashboardCreateModalProps = {
-  semesterId: number;
   subjects: Subject[];
 };
 
-export function DashboardCreateModal({ semesterId, subjects }: DashboardCreateModalProps) {
+export function DashboardCreateModal({ subjects }: DashboardCreateModalProps) {
   const router = useRouter();
+  const { create, creating } = useDashboardCreateItem();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<CreateKind>('assignment');
   const [title, setTitle] = useState('');
   const [subjectId, setSubjectId] = useState<number | null>(subjects[0]?.id ?? null);
   const [date, setDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [saving, setSaving] = useState(false);
   const [attemptedSave, setAttemptedSave] = useState(false);
 
   useEffect(() => {
@@ -76,21 +75,20 @@ export function DashboardCreateModal({ semesterId, subjects }: DashboardCreateMo
     if (kind === 'assignment' && subjectId == null) return;
     if (kind === 'sprint' && (!date || !endDate)) return;
 
-    setSaving(true);
     try {
       if (kind === 'assignment') {
-        await createAssignment(subjectId!, title.trim(), null, date ? new Date(date) : null);
+        await create({ kind: 'assignment', input: { subjectId: subjectId!, title: title.trim(), description: '', dueDate: date } });
       } else if (kind === 'todo') {
-        await createTodo(semesterId, title.trim(), subjectId, date ? new Date(date) : null);
+        await create({ kind: 'todo', input: { title: title.trim(), dueDate: date, subjectId } });
       } else if (kind === 'sprint') {
-        await createExamSprint(semesterId, title.trim(), new Date(date), new Date(endDate));
+        await create({ kind: 'sprint', input: { name: title.trim(), startDate: date, endDate } });
       } else {
-        await createSubject(semesterId, title.trim(), '#3b82f6');
+        await create({ kind: 'subject', input: { id: null, name: title.trim(), color: '#3b82f6' } });
       }
       reset(false);
       router.refresh();
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error(error);
     }
   }
 
@@ -211,7 +209,7 @@ export function DashboardCreateModal({ semesterId, subjects }: DashboardCreateMo
                 <DialogPrimitive.Close render={<Button type="button" variant="ghost" size="sm" />}>
                   Cancel
                 </DialogPrimitive.Close>
-                <Button type="submit" size="sm" disabled={!canSave} loading={saving}>
+                <Button type="submit" size="sm" disabled={!canSave} loading={creating}>
                   <Plus className="h-3.5 w-3.5" />
                   Add {CREATE_OPTIONS.find((option) => option.kind === kind)?.label.toLowerCase()}
                 </Button>

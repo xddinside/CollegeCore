@@ -1,43 +1,64 @@
-export type DesktopSettings = {
-  notificationsEnabled: boolean;
-  minimizeToTray: boolean;
-  notificationCheckIntervalMinutes: number;
-  hasSeenNotificationPrompt: boolean;
+import {
+  DEFAULT_DESKTOP_SETTINGS,
+  NOTIFICATION_INTERVAL_OPTIONS,
+  clampNotificationInterval,
+  type DesktopReminderMessage,
+  type DesktopSettings,
+  type DesktopSettingsChange,
+  type DesktopSettingsState,
+  type DesktopSettingsUpdate,
+} from '../../electron/desktop-contract';
+
+export type DesktopSettingsAccess = {
+  readState: () => Promise<DesktopSettingsState>;
+  apply: (command: DesktopSettingsChange) => Promise<DesktopSettingsState>;
+  onChanged: (listener: (settings: DesktopSettings) => void) => () => void;
 };
 
-export type DesktopSettingsUpdate = Partial<
-  Pick<DesktopSettings, 'notificationsEnabled' | 'minimizeToTray' | 'notificationCheckIntervalMinutes'>
->;
-
-export type DesktopLaunchState = {
-  settings: DesktopSettings;
-  shouldShowNotificationPrompt: boolean;
+export type DesktopReminderAccess = {
+  submit: (reminders: DesktopReminderMessage[]) => Promise<void>;
+  onPoll: (listener: () => void | Promise<void>) => () => void;
 };
 
-export type DesktopReminderCandidate = {
-  id: string;
-  title: string;
-  body: string;
-  route?: string;
+export type DesktopRuntimeAccess =
+  | { kind: 'electron'; settings: DesktopSettingsAccess; reminders: DesktopReminderAccess }
+  | { kind: 'browser' };
+
+export type {
+  DesktopSettings,
+  DesktopSettingsChange,
+  DesktopSettingsState,
+  DesktopSettingsUpdate,
+  DesktopReminderMessage,
 };
 
-export const NOTIFICATION_INTERVAL_OPTIONS = [5, 10, 15, 30, 60] as const;
-
-export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
-  notificationsEnabled: true,
-  minimizeToTray: false,
-  notificationCheckIntervalMinutes: 15,
-  hasSeenNotificationPrompt: false,
+export {
+  DEFAULT_DESKTOP_SETTINGS,
+  NOTIFICATION_INTERVAL_OPTIONS,
+  clampNotificationInterval,
 };
 
-export function clampNotificationInterval(value: number) {
-  if (!Number.isFinite(value)) {
-    return DEFAULT_DESKTOP_SETTINGS.notificationCheckIntervalMinutes;
+export function getDesktopRuntime(): DesktopRuntimeAccess {
+  if (typeof window === 'undefined' || typeof window.collegeCoreDesktop === 'undefined') {
+    return { kind: 'browser' };
   }
 
-  return Math.min(60, Math.max(5, Math.round(value)));
-}
+  const bridge = window.collegeCoreDesktop;
 
-export function hasDesktopBridge() {
-  return typeof window !== 'undefined' && typeof window.collegeCoreDesktop !== 'undefined';
+  if (!bridge) {
+    return { kind: 'browser' };
+  }
+
+  return {
+    kind: 'electron',
+    settings: {
+      readState: () => bridge.readSettingsState(),
+      apply: (command) => bridge.applySettings(command),
+      onChanged: (listener) => bridge.onSettingsChanged(listener),
+    },
+    reminders: {
+      submit: (reminders) => bridge.submitReminders(reminders),
+      onPoll: (listener) => bridge.onReminderPoll(listener),
+    },
+  };
 }

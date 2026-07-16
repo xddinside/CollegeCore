@@ -4,22 +4,23 @@ import { Bell, LaptopMinimal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { hasDesktopBridge } from '@/lib/desktop';
+import { getDesktopRuntime } from '@/lib/desktop';
 
 export function DesktopNotificationPrompt() {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!hasDesktopBridge() || !window.collegeCoreDesktop) {
+    const runtime = getDesktopRuntime();
+    if (runtime.kind !== 'electron') {
       return;
     }
 
     let active = true;
 
-    void window.collegeCoreDesktop.getLaunchState().then((launchState) => {
+    void runtime.settings.readState().then((state) => {
       if (active) {
-        setVisible(launchState.shouldShowNotificationPrompt);
+        setVisible(state.shouldShowNotificationPrompt);
       }
     });
 
@@ -33,7 +34,12 @@ export function DesktopNotificationPrompt() {
   }
 
   async function dismiss() {
-    await window.collegeCoreDesktop?.dismissNotificationPrompt();
+    const runtime = getDesktopRuntime();
+    if (runtime.kind !== 'electron') {
+      setVisible(false);
+      return;
+    }
+    await runtime.settings.apply({ type: 'dismiss-notification-prompt' });
     setVisible(false);
   }
 

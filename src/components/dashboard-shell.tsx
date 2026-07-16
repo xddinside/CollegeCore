@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Calendar,
@@ -17,19 +16,24 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { dashboardPrefetchRegistry } from "@/lib/dashboard-prefetch-registry";
-import { hasDesktopBridge } from "@/lib/desktop";
+import { useDashboardDataPrefetch, type DashboardArea } from "@/lib/dashboard/client-data";
+import { getDesktopRuntime } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/dashboard/command-palette";
 import { NoiseBackground } from "@/components/noise-background";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  dataArea?: DashboardArea;
+}> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/assignments", label: "Assignments", icon: CheckSquare },
-  { href: "/dashboard/todos", label: "Todos", icon: ListTodo },
-  { href: "/dashboard/sprints", label: "Sprints", icon: Calendar },
-  { href: "/dashboard/subjects", label: "Subjects", icon: BookOpen },
+  { href: "/dashboard/assignments", label: "Assignments", icon: CheckSquare, dataArea: "assignments" },
+  { href: "/dashboard/todos", label: "Todos", icon: ListTodo, dataArea: "todos" },
+  { href: "/dashboard/sprints", label: "Sprints", icon: Calendar, dataArea: "sprints" },
+  { href: "/dashboard/subjects", label: "Subjects", icon: BookOpen, dataArea: "subjects" },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
@@ -50,26 +54,13 @@ function runWhenBrowserIdle(callback: () => void) {
 
 function usePrefetchNavData() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { user } = useUser();
+  const { prefetch } = useDashboardDataPrefetch();
 
-  return function handleNavIntent(href: string) {
-    if (!user) {
-      return;
-    }
-
+  return function handleNavIntent(href: string, dataArea?: DashboardArea) {
     router.prefetch(href);
-
-    const descriptor = dashboardPrefetchRegistry[href];
-    if (!descriptor) {
-      return;
+    if (dataArea) {
+      void prefetch(dataArea);
     }
-
-    void queryClient.prefetchQuery({
-      queryKey: descriptor.queryKey(user.id),
-      queryFn: () => descriptor.queryFn(user.id),
-      staleTime: descriptor.staleTime,
-    });
   };
 }
 
@@ -98,10 +89,10 @@ function NavItems({
           "aria-current": isActive ? ("page" as const) : undefined,
           onClick: onNavigate,
           onFocus: intentHandlers
-            ? () => handleNavIntent(item.href)
+            ? () => handleNavIntent(item.href, item.dataArea)
             : undefined,
           onPointerEnter: intentHandlers
-            ? () => handleNavIntent(item.href)
+            ? () => handleNavIntent(item.href, item.dataArea)
             : undefined,
         };
 
@@ -158,7 +149,7 @@ export function DashboardShell({
   const displayName = user?.firstName || user?.fullName || "Student";
 
   useEffect(() => {
-    if (!hasDesktopBridge()) {
+    if (getDesktopRuntime().kind !== 'electron') {
       return;
     }
 
